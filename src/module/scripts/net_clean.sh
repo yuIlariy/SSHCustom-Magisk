@@ -1,4 +1,15 @@
 #!/system/bin/sh
+#
+# Belt-and-suspenders iptables cleanup. The Go daemon does its own cleanup
+# in iptables.Cleanup() during shutdown, but if the daemon crashed or was
+# killed mid-rule, leftover SSHC_* chains could remain and silently break
+# the device's networking. This script is callable from sshcustom.sh stop
+# and from customize.sh during a fresh install to guarantee a clean slate.
+#
+# Removes every SSHC_* chain name we have ever shipped (current and legacy)
+# from both the IPv4 and IPv6 nat tables, plus the FORWARD ACCEPT rule that
+# hotspot mode adds. Errors are silenced because every -D against a missing
+# rule is harmless noise.
 
 RUN_DIR="/data/adb/sshcustom/run"
 LOG="$RUN_DIR/net_clean.log"
@@ -6,6 +17,9 @@ mkdir -p "$RUN_DIR"
 
 IPT="iptables"
 IP6T="ip6tables"
+# Every chain SSHCustom-Magisk has ever installed in any version. Keeping
+# legacy names here means a user upgrading from a pre-v2 build still gets
+# their orphaned chains removed even if those chains are no longer created.
 CHAINS="SSHC_OUTPUT SSHC_PREROUTING SSHC_PROXY SSHC_DNS SSHC_HOTSPOT SSHC_HOTSPOT_DNS"
 IFACES="wlan+ swlan+ ap+ rndis+ ncm+ bt-pan+"
 
@@ -28,8 +42,6 @@ clean_v4() {
     run $IPT -t nat -X "$C"
   done
   run $IPT -D FORWARD -j ACCEPT
-  run ip rule del fwmark 110 table 110
-  run ip route flush table 110
 }
 
 clean_v6() {
@@ -47,8 +59,6 @@ clean_v6() {
     run $IP6T -t nat -F "$C"
     run $IP6T -t nat -X "$C"
   done
-  run ip -6 rule del fwmark 110 table 110
-  run ip -6 route flush table 110
 }
 
 log "clean start"

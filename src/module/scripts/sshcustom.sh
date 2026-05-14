@@ -125,7 +125,7 @@ stop_runtime() {
 
 start_module() {
   echo "starting sshcustom module..."
-  log "manual/action start v1.0.0"
+  log "manual/action start v2.0.0"
   mkdir -p "$RUN_DIR"
   : > "$CORE_LOG"
   echo "$(date '+%Y-%m-%d %H:%M:%S') core.log reset for fresh module start" >> "$CORE_LOG"

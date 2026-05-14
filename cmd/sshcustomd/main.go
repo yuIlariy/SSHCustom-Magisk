@@ -28,10 +28,17 @@ import (
 	"sync/atomic"
 
 	"github.com/GoodyOG/SSHCustom_Magisk/internal/apiv1"
+	"github.com/GoodyOG/SSHCustom_Magisk/internal/dnsx"
+	"github.com/GoodyOG/SSHCustom_Magisk/internal/iptables"
+	"github.com/GoodyOG/SSHCustom_Magisk/internal/metrics"
+	"github.com/GoodyOG/SSHCustom_Magisk/internal/version"
+	"github.com/GoodyOG/SSHCustom_Magisk/internal/webui"
 	xssh "golang.org/x/crypto/ssh"
 )
 
-var Version = "1.0.0"
+// Version is set by -ldflags from the repository-root VERSION file at build
+// time. The package alias keeps the existing call sites working.
+var Version = version.Version
 
 const defaultCopyBufferSize = 128 * 1024
 const maxCopyBufferSize = 256 * 1024
@@ -545,120 +552,11 @@ func run(args []string) {
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, state.Snapshot()) })
-	mux.HandleFunc("/api/profiles", func(w http.ResponseWriter, r *http.Request) {
-		profileMu.Lock()
-		defer profileMu.Unlock()
-		latest, err := loadProfiles(*profPath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		pf = latest
-		writeJSON(w, latest)
-	})
-	mux.HandleFunc("/api/profile/current", func(w http.ResponseWriter, r *http.Request) {
-		profileMu.Lock()
-		defer profileMu.Unlock()
-		latest, err := loadProfiles(*profPath)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		sp := selectedProfile(latest)
-		if sp == nil {
-			http.Error(w, "no selected profile", http.StatusNotFound)
-			return
-		}
-		writeJSON(w, sp)
-	})
-	mux.HandleFunc("/api/profile/select", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "POST required", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			SelectedID string `json:"selected_id"`
-			Restart    bool   `json:"restart"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		profileMu.Lock()
-		latest, err := loadProfiles(*profPath)
-		if err == nil {
-			err = selectProfileByID(&latest, req.SelectedID)
-		}
-		if err == nil {
-			err = saveProfiles(*profPath, latest)
-		}
-		if err == nil {
-			pf = latest
-		}
-		profileMu.Unlock()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if req.Restart {
-			scheduleControl(*workDir, "restart")
-		}
-		writeJSON(w, map[string]any{"ok": true, "selected_id": req.SelectedID, "restart": req.Restart})
-	})
-	mux.HandleFunc("/api/profile/save", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "POST required", http.StatusMethodNotAllowed)
-			return
-		}
-		var req SaveProfileRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		profileMu.Lock()
-		latest, err := loadProfiles(*profPath)
-		if err == nil {
-			err = upsertProfile(&latest, req)
-		}
-		if err == nil {
-			err = saveProfiles(*profPath, latest)
-		}
-		if err == nil {
-			pf = latest
-		}
-		profileMu.Unlock()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if req.Restart {
-			scheduleControl(*workDir, "restart")
-		}
-		writeJSON(w, map[string]any{"ok": true, "selected_id": req.ID, "restart": req.Restart})
-	})
-	mux.HandleFunc("/api/control", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "POST required", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			Action string `json:"action"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if err := scheduleControl(*workDir, req.Action); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, map[string]any{"ok": true, "action": req.Action})
-	})
-	mux.HandleFunc("/api/config", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, getConfig()) })
-	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok\n")) })
-	mux.HandleFunc("/api/logs/core", func(w http.ResponseWriter, r *http.Request) { serveLog(w, filepath.Join(runDir, "core.log")) })
-	mux.HandleFunc("/api/logs/control", func(w http.ResponseWriter, r *http.Request) { serveLog(w, filepath.Join(runDir, "control.log")) })
+	// Only the v1 API surface is registered. The legacy /api/{status,
+	// profiles, profile/*, control, config, health, logs/*} endpoints from
+	// pre-2.0 module versions are gone — everything routes through the
+	// /api/v1/* envelope shape now. Any third-party scripts that still hit
+	// the old paths will get 404 and need updating.
 	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, r *http.Request) {
 		writeV1OK(w, apiv1.HealthResponse{Status: "ok", Version: Version})
 	})
@@ -857,14 +755,11 @@ func run(args []string) {
 	mux.HandleFunc("/api/v1/logs/core/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "core.log") })
 	mux.HandleFunc("/api/v1/logs/control/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "control.log") })
 	mux.HandleFunc("/api/v1/logs/action/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "action.log") })
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if b, err := os.ReadFile(filepath.Join(*workDir, "webroot", "index.html")); err == nil && len(b) > 0 {
-			_, _ = w.Write(b)
-			return
-		}
-		_, _ = w.Write([]byte(indexHTML))
-	})
+	// Dashboard. webui.Handler prefers <work_dir>/webroot/index.html when
+	// present and falls back to the embedded HTML otherwise. This means a
+	// fresh install always has a working UI even if the file copy step
+	// failed, and developers can hot-edit on disk during testing.
+	mux.Handle("/", webui.Handler(*workDir))
 
 	addr := net.JoinHostPort(cfg.API.Host, strconv.Itoa(cfg.API.Port))
 	srv := &http.Server{
@@ -2015,200 +1910,23 @@ func dialTCPResolved(ctx context.Context, cfg Config, host string, port int, fal
 }
 
 // dnsCache holds recently resolved IPs to avoid repeated ping subprocesses.
-var dnsCache struct {
-	sync.Mutex
-	entries map[string]dnsCacheEntry
+// dnsCfgFromConfig converts the daemon's Config to the dnsx package's Config.
+// Centralizing this conversion in one place means future config schema
+// changes only have to update this single function.
+func dnsCfgFromConfig(cfg Config) dnsx.Config {
+	return dnsx.Config{
+		Mode:    dnsx.Mode(normalizeDNSMode(cfg.DNS.Mode)),
+		Servers: cfg.DNS.Servers,
+	}
 }
 
-type dnsCacheEntry struct {
-	ips     []string
-	method  string
-	expires time.Time
-}
-
-// resolveHostSmart resolves a hostname using Android's real DNS servers.
-//
-// Why not net.DefaultResolver on Android?
-//
-//	Go's net package reads /etc/resolv.conf or tries [::1]:53 (dnsproxyd).
-//	Android's dnsproxyd is a restricted system service — it accepts connections
-//	from whitelisted apps via Unix socket /dev/socket/dnsproxyd, not UDP 53.
-//	Our Go binary is not whitelisted, so [::1]:53 gets "connection refused".
-//	HTTP Injector/HTTP Custom work because they use Java InetAddress which goes
-//	through the proper Android DNS framework. We can't do that from Go.
-//
-// Solution: read the REAL carrier DNS server IPs from Android system properties
-//
-//	(net.dns1, net.dns2, net.rmnet_data0.dns1, etc.) and query them directly
-//	via UDP. These are the same IPs the carrier assigns — e.g. MTN's actual
-//	DNS servers. Direct UDP to those IPs always works.
+// resolveHostSmart delegates to the dnsx package. The shim exists so the
+// call sites in this file (dialTCPResolved, etc.) don't need to be updated.
 func resolveHostSmart(ctx context.Context, cfg Config, host string) ([]string, string) {
-	cacheKey := dnsCacheKey(cfg, host)
-	// Check 5-min cache first
-	dnsCache.Lock()
-	if dnsCache.entries == nil {
-		dnsCache.entries = make(map[string]dnsCacheEntry)
-	}
-	if e, ok := dnsCache.entries[cacheKey]; ok && time.Now().Before(e.expires) {
-		dnsCache.Unlock()
-		log.Printf("resolved %s from dns_cache mode=%s -> %v", host, cfg.DNS.Mode, e.ips)
-		return e.ips, "dns_cached_" + e.method
-	}
-	dnsCache.Unlock()
-
-	// Step 1: use the configured SSHCustom resolver mode.
-	servers, method := configuredDNSServers(ctx, cfg)
-	if len(servers) > 0 {
-		if ips := resolveViaDirectDNS(ctx, host, servers); len(ips) > 0 {
-			cacheDNS(cacheKey, ips, method)
-			return ips, method
-		}
-	}
-
-	// Step 2: fall back to shell commands (getent, ping)
-	if ips := shellResolveHost(ctx, host); len(ips) > 0 {
-		cacheDNS(cacheKey, ips, "android_shell_dns")
-		return ips, "android_shell_dns"
-	}
-
-	return nil, "dns_failed"
+	return dnsx.ResolveHost(ctx, dnsCfgFromConfig(cfg), host)
 }
 
-func dnsCacheKey(cfg Config, host string) string {
-	servers := strings.Join(normalizedDNSServers(cfg.DNS.Servers), ",")
-	return normalizeDNSMode(cfg.DNS.Mode) + "|" + servers + "|" + strings.ToLower(strings.TrimSpace(host))
-}
-
-func configuredDNSServers(ctx context.Context, cfg Config) ([]string, string) {
-	switch normalizeDNSMode(cfg.DNS.Mode) {
-	case "google":
-		return normalizedDNSServers([]string{"8.8.8.8", "8.8.4.4"}), "google_dns"
-	case "cloudflare":
-		return normalizedDNSServers([]string{"1.1.1.1", "1.0.0.1"}), "cloudflare_dns"
-	case "custom":
-		return normalizedDNSServers(cfg.DNS.Servers), "custom_dns"
-	default:
-		return androidRealDNSServers(ctx), "android_real_dns"
-	}
-}
-
-func cacheDNS(key string, ips []string, method string) {
-	dnsCache.Lock()
-	dnsCache.entries[key] = dnsCacheEntry{ips: ips, method: method, expires: time.Now().Add(5 * time.Minute)}
-	dnsCache.Unlock()
-}
-
-func evictDNSCache(host string) {
-	if host == "" {
-		return
-	}
-	dnsCache.Lock()
-	for key := range dnsCache.entries {
-		if key == host || strings.HasSuffix(key, "|"+strings.ToLower(strings.TrimSpace(host))) {
-			delete(dnsCache.entries, key)
-		}
-	}
-	dnsCache.Unlock()
-	log.Printf("DNS cache evicted for %s", host)
-}
-
-// androidDNSCache caches the DNS server IPs from getprop for 2 minutes.
-// getprop is fast (~1ms) but we still don't want to call it dozens of times.
-var androidDNSCache struct {
-	sync.Mutex
-	servers []string
-	expires time.Time
-}
-
-// androidRealDNSServers reads actual carrier DNS server IPs from Android
-// system properties. These are the IPs set by the network stack when data
-// connects — they bypass dnsproxyd entirely.
-func androidRealDNSServers(ctx context.Context) []string {
-	androidDNSCache.Lock()
-	if time.Now().Before(androidDNSCache.expires) && len(androidDNSCache.servers) > 0 {
-		s := androidDNSCache.servers
-		androidDNSCache.Unlock()
-		return s
-	}
-	androidDNSCache.Unlock()
-
-	// Android stores DNS in multiple getprop keys depending on version and interface.
-	// We try all known patterns and deduplicate.
-	props := []string{
-		"net.dns1", "net.dns2", "net.dns3", "net.dns4",
-		"net.rmnet0.dns1", "net.rmnet0.dns2",
-		"net.rmnet_data0.dns1", "net.rmnet_data0.dns2",
-		"net.rmnet_data1.dns1", "net.rmnet_data1.dns2",
-		"net.rmnet_data2.dns1", "net.rmnet_data2.dns2",
-		"dhcp.rmnet_data0.dns1", "dhcp.rmnet_data0.dns2",
-		"dhcp.wlan0.dns1", "dhcp.wlan0.dns2",
-	}
-	var servers []string
-	seen := map[string]bool{}
-	for _, prop := range props {
-		cctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-		out, err := exec.CommandContext(cctx, "getprop", prop).Output()
-		cancel()
-		if err != nil {
-			continue
-		}
-		ip := strings.TrimSpace(string(out))
-		if ip == "" || ip == "0.0.0.0" {
-			continue
-		}
-		if net.ParseIP(ip) == nil {
-			continue
-		}
-		addr := net.JoinHostPort(ip, "53")
-		if !seen[addr] {
-			seen[addr] = true
-			servers = append(servers, addr)
-		}
-		if len(servers) >= 3 {
-			break
-		}
-	}
-	if len(servers) > 0 {
-		log.Printf("android real DNS servers: %v", servers)
-		androidDNSCache.Lock()
-		androidDNSCache.servers = servers
-		androidDNSCache.expires = time.Now().Add(2 * time.Minute)
-		androidDNSCache.Unlock()
-	}
-	return servers
-}
-
-// resolveViaDirectDNS sends a raw DNS A query directly to each server via UDP.
-// This bypasses Android's dnsproxyd completely.
-func resolveViaDirectDNS(ctx context.Context, host string, servers []string) []string {
-	res := &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			// Try each real DNS server in order
-			var lastErr error
-			for _, srv := range servers {
-				d := &net.Dialer{Timeout: 3 * time.Second}
-				c, err := d.DialContext(ctx, "udp", srv)
-				if err == nil {
-					return c, nil
-				}
-				lastErr = err
-			}
-			return nil, lastErr
-		},
-	}
-	addrs, err := res.LookupHost(ctx, host)
-	if err != nil {
-		return nil
-	}
-	var ips []string
-	for _, a := range addrs {
-		if ip := net.ParseIP(a); ip != nil && ip.To4() != nil {
-			ips = appendUnique(ips, ip.String())
-		}
-	}
-	return ips
-}
+func evictDNSCache(host string) { dnsx.EvictHost(host) }
 
 func dialFallbackIPs(p Profile, host string) []string {
 	var out []string
@@ -2219,60 +1937,12 @@ func dialFallbackIPs(p Profile, host string) []string {
 		out = append(out, p.Transport.HTTPProxy.FallbackIPs...)
 		out = append(out, p.SSH.FallbackIPs...)
 	}
-	return sanitizeIPv4List(out)
+	return dnsx.SanitizeIPv4List(out)
 }
 
-func sanitizeIPv4List(in []string) []string {
-	var out []string
-	for _, s := range in {
-		s = strings.TrimSpace(s)
-		ip := net.ParseIP(s)
-		if ip == nil || ip.To4() == nil {
-			continue
-		}
-		out = appendUnique(out, ip.String())
-	}
-	return out
-}
-
-func rotateIPs(in []string) []string {
-	if len(in) <= 1 {
-		return in
-	}
-	out := append([]string(nil), in...)
-	off := int(time.Now().UnixNano() % int64(len(out)))
-	return append(out[off:], out[:off]...)
-}
-
-func shellResolveHost(ctx context.Context, host string) []string {
-	cmds := [][]string{{"getent", "ahostsv4", host}, {"toybox", "getent", "ahostsv4", host}, {"ping", "-c", "1", "-W", "2", host}}
-	for _, c := range cmds {
-		cctx, cancel := context.WithTimeout(ctx, 3500*time.Millisecond)
-		out, err := exec.CommandContext(cctx, c[0], c[1:]...).CombinedOutput()
-		cancel()
-		if err != nil && len(out) == 0 {
-			continue
-		}
-		ips := extractIPv4s(string(out))
-		if len(ips) > 0 {
-			log.Printf("resolved %s via shell %s -> %v", host, strings.Join(c, " "), ips)
-			return ips
-		}
-	}
-	return nil
-}
-
-func extractIPv4s(s string) []string {
-	fields := strings.FieldsFunc(s, func(r rune) bool { return !(r == '.' || (r >= '0' && r <= '9')) })
-	var out []string
-	for _, f := range fields {
-		ip := net.ParseIP(f)
-		if ip != nil && ip.To4() != nil {
-			out = appendUnique(out, ip.String())
-		}
-	}
-	return out
-}
+func sanitizeIPv4List(in []string) []string { return dnsx.SanitizeIPv4List(in) }
+func rotateIPs(in []string) []string        { return dnsx.RotateIPs(in) }
+func extractIPv4s(s string) []string        { return dnsx.ExtractIPv4s(s) }
 
 func appendUnique(xs []string, v string) []string {
 	for _, x := range xs {
@@ -2780,104 +2450,26 @@ func isLocalOrBlockedTarget(target string, cfg Config) bool {
 	return ip.IsLoopback() || ip.IsUnspecified() || ip.IsMulticast()
 }
 
+// iptablesCfgFromConfig builds an iptables.Config from the daemon Config.
+// Centralizing the conversion keeps the package boundary clean and means
+// schema changes only touch this one helper.
+func iptablesCfgFromConfig(cfg Config) iptables.Config {
+	return iptables.Config{
+		ChainsPrefix:  cfg.TransparentProxy.ChainsPrefix,
+		TCPPort:       cfg.TransparentProxy.TCPPort,
+		APIPort:       cfg.API.Port,
+		SocksPort:     cfg.LocalProxy.SocksPort,
+		Hotspot:       cfg.Hotspot.Enabled && cfg.Hotspot.TCP,
+		HotspotIfaces: cfg.Hotspot.Interfaces,
+	}
+}
+
 func applyTransparentRules(cfg Config, bypassIPs []string) error {
-	prefix := cfg.TransparentProxy.ChainsPrefix
-	if prefix == "" {
-		prefix = "SSHC"
-	}
-	outChain := prefix + "_OUTPUT"
-	preChain := prefix + "_PREROUTING"
-	port := cfg.TransparentProxy.TCPPort
-	if port <= 0 {
-		port = 10810
-	}
-	var errs []string
-	run := func(args ...string) {
-		cmd := exec.Command("iptables", args...)
-		if b, err := cmd.CombinedOutput(); err != nil {
-			errs = append(errs, fmt.Sprintf("iptables %s: %v %s", strings.Join(args, " "), err, strings.TrimSpace(string(b))))
-		}
-	}
-	cleanupTransparentRules(cfg)
-	for _, ch := range []string{outChain, preChain} {
-		run("-t", "nat", "-N", ch)
-		run("-t", "nat", "-F", ch)
-	}
-	addBypasses := func(ch string, output bool) {
-		if output {
-			run("-t", "nat", "-A", ch, "-m", "owner", "--uid-owner", "0", "-j", "RETURN")
-		}
-		for _, cidr := range []string{"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12", "192.168.0.0/16", "224.0.0.0/4", "240.0.0.0/4"} {
-			run("-t", "nat", "-A", ch, "-d", cidr, "-j", "RETURN")
-		}
-		for _, ip := range sanitizeIPv4List(bypassIPs) {
-			run("-t", "nat", "-A", ch, "-d", ip, "-j", "RETURN")
-		}
-		for _, p := range []int{cfg.API.Port, cfg.LocalProxy.SocksPort, cfg.TransparentProxy.TCPPort} {
-			if p > 0 {
-				run("-t", "nat", "-A", ch, "-p", "tcp", "--dport", strconv.Itoa(p), "-j", "RETURN")
-			}
-		}
-		run("-t", "nat", "-A", ch, "-p", "tcp", "-j", "REDIRECT", "--to-ports", strconv.Itoa(port))
-	}
-	addBypasses(outChain, true)
-	addBypasses(preChain, false)
-	run("-t", "nat", "-I", "OUTPUT", "1", "-p", "tcp", "-j", outChain)
-	if cfg.Hotspot.Enabled && cfg.Hotspot.TCP {
-		ifaces := cfg.Hotspot.Interfaces
-		if len(ifaces) == 0 {
-			ifaces = []string{"wlan+", "swlan+", "ap+", "rndis+", "ncm+", "bt-pan+"}
-		}
-		for _, iface := range ifaces {
-			if strings.TrimSpace(iface) != "" {
-				run("-t", "nat", "-I", "PREROUTING", "1", "-i", iface, "-p", "tcp", "-j", preChain)
-			}
-		}
-		exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
-		exec.Command("iptables", "-I", "FORWARD", "-j", "ACCEPT").Run()
-	}
-	// Ignore harmless duplicate/delete errors during cleanup, but fail when chains/rules could not be created.
-	var fatal []string
-	for _, e := range errs {
-		if strings.Contains(e, "No chain/target/match") || strings.Contains(e, "does a matching rule exist") || strings.Contains(e, "Chain already exists") {
-			continue
-		}
-		fatal = append(fatal, e)
-	}
-	if len(fatal) > 0 {
-		return errors.New(strings.Join(fatal, "; "))
-	}
-	return nil
+	return iptables.Apply(iptablesCfgFromConfig(cfg), dnsx.SanitizeIPv4List(bypassIPs))
 }
 
 func cleanupTransparentRules(cfg Config) error {
-	prefix := cfg.TransparentProxy.ChainsPrefix
-	if prefix == "" {
-		prefix = "SSHC"
-	}
-	chains := []string{prefix + "_OUTPUT", prefix + "_PREROUTING", prefix + "_PROXY", prefix + "_DNS", prefix + "_HOTSPOT", prefix + "_HOTSPOT_DNS"}
-	ifaces := cfg.Hotspot.Interfaces
-	if len(ifaces) == 0 {
-		ifaces = []string{"wlan+", "swlan+", "ap+", "rndis+", "ncm+", "bt-pan+"}
-	}
-	for _, ch := range chains {
-		exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "-j", ch).Run()
-		exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-j", ch).Run()
-		exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-j", ch).Run()
-		exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-j", ch).Run()
-		for _, iface := range ifaces {
-			if strings.TrimSpace(iface) != "" {
-				exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "-j", ch).Run()
-				exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-j", ch).Run()
-			}
-		}
-	}
-	for _, ch := range chains {
-		exec.Command("iptables", "-t", "nat", "-F", ch).Run()
-		exec.Command("iptables", "-t", "nat", "-X", ch).Run()
-	}
-	exec.Command("iptables", "-D", "FORWARD", "-j", "ACCEPT").Run()
-	return nil
+	return iptables.Cleanup(iptablesCfgFromConfig(cfg))
 }
 
 type SaveProfileRequest struct {
@@ -3265,137 +2857,41 @@ func routeSignature(ri RouteInfo) string {
 	return "online"
 }
 
+// startMetricsSampler periodically writes a metrics snapshot into State so
+// the dashboard always has fresh CPU/memory/goroutine numbers.
+//
+// 20-second cadence: gives enough resolution to spot a stuck pool or memory
+// leak without burning CPU on /proc reads. The first sample lands in State
+// immediately so the dashboard shows real numbers as soon as it loads.
 func startMetricsSampler(ctx context.Context, st *State) {
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()
-	var lastTotal, lastProc uint64
-	updateMetrics(st, &lastTotal, &lastProc)
+	sampler := &metrics.Sampler{}
+	applySample(st, sampler.Sample())
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			updateMetrics(st, &lastTotal, &lastProc)
+			applySample(st, sampler.Sample())
 		}
 	}
 }
 
-func updateMetrics(st *State, lastTotal *uint64, lastProc *uint64) {
-	total, okT := readSystemCPUTicks()
-	proc, okP := readProcessCPUTicks()
-	cpuPct := 0.0
-	if okT && okP && *lastTotal > 0 && total > *lastTotal {
-		dt := total - *lastTotal
-		dp := proc - *lastProc
-		cpuPct = (float64(dp) / float64(dt)) * 100.0
-	}
-	if okT {
-		*lastTotal = total
-	}
-	if okP {
-		*lastProc = proc
-	}
-	rss := readRSSBytes()
-	memTotal, memAvail := readMemInfoBytes()
-	usedPct := 0.0
-	if memTotal > 0 && memAvail <= memTotal {
-		usedPct = (float64(memTotal-memAvail) / float64(memTotal)) * 100.0
-	}
+// applySample copies the metrics package's snapshot into the daemon's
+// State struct under the state lock. The State fields existed before the
+// metrics package split; we keep them as the public surface to avoid
+// rewriting every dashboard call site.
+func applySample(st *State, snap metrics.Snapshot) {
 	st.set(func() {
-		st.CPUPercent = round1(cpuPct)
-		st.MemoryRSSBytes = rss
-		st.MemoryRSSMB = round1(float64(rss) / 1024.0 / 1024.0)
-		st.SystemMemTotalBytes = memTotal
-		st.SystemMemAvailBytes = memAvail
-		st.SystemMemUsedPct = round1(usedPct)
-		st.Goroutines = runtime.NumGoroutine()
+		st.CPUPercent = snap.CPUPercent
+		st.MemoryRSSBytes = snap.MemoryRSSBytes
+		st.MemoryRSSMB = snap.MemoryRSSMB
+		st.SystemMemTotalBytes = snap.SystemMemTotal
+		st.SystemMemAvailBytes = snap.SystemMemAvail
+		st.SystemMemUsedPct = snap.SystemMemUsedPct
+		st.Goroutines = snap.Goroutines
 	})
-}
-
-func round1(v float64) float64 {
-	if v < 0 {
-		v = 0
-	}
-	return float64(int(v*10+0.5)) / 10
-}
-
-func readSystemCPUTicks() (uint64, bool) {
-	b, err := os.ReadFile("/proc/stat")
-	if err != nil {
-		return 0, false
-	}
-	lines := strings.Split(string(b), "\n")
-	if len(lines) == 0 || !strings.HasPrefix(lines[0], "cpu ") {
-		return 0, false
-	}
-	var total uint64
-	for _, f := range strings.Fields(lines[0])[1:] {
-		v, err := strconv.ParseUint(f, 10, 64)
-		if err == nil {
-			total += v
-		}
-	}
-	return total, total > 0
-}
-
-func readProcessCPUTicks() (uint64, bool) {
-	b, err := os.ReadFile("/proc/self/stat")
-	if err != nil {
-		return 0, false
-	}
-	s := string(b)
-	idx := strings.LastIndex(s, ")")
-	if idx < 0 || idx+2 >= len(s) {
-		return 0, false
-	}
-	fields := strings.Fields(s[idx+2:])
-	if len(fields) < 13 {
-		return 0, false
-	}
-	utime, err1 := strconv.ParseUint(fields[11], 10, 64)
-	stime, err2 := strconv.ParseUint(fields[12], 10, 64)
-	return utime + stime, err1 == nil && err2 == nil
-}
-
-func readRSSBytes() uint64 {
-	b, err := os.ReadFile("/proc/self/statm")
-	if err != nil {
-		return 0
-	}
-	fields := strings.Fields(string(b))
-	if len(fields) < 2 {
-		return 0
-	}
-	pages, err := strconv.ParseUint(fields[1], 10, 64)
-	if err != nil {
-		return 0
-	}
-	return pages * uint64(os.Getpagesize())
-}
-
-func readMemInfoBytes() (uint64, uint64) {
-	b, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0, 0
-	}
-	var total, avail uint64
-	for _, line := range strings.Split(string(b), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		v, err := strconv.ParseUint(fields[1], 10, 64)
-		if err != nil {
-			continue
-		}
-		switch strings.TrimSuffix(fields[0], ":") {
-		case "MemTotal":
-			total = v * 1024
-		case "MemAvailable":
-			avail = v * 1024
-		}
-	}
-	return total, avail
 }
 
 func renderPayload(t string, p Profile) string {
@@ -3954,24 +3450,3 @@ func readSOCKS5ConnectReply(r io.Reader) error {
 	_, err := io.CopyN(io.Discard, r, 2)
 	return err
 }
-
-const indexHTML = `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SSHCustom-Magisk</title>
-<style>
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:#111318;color:#e3e2e8;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.card{width:min(420px,calc(100vw - 32px));border-radius:24px;background:#282a30;padding:24px;box-sizing:border-box}
-h1{margin:0 0 8px;font-size:1.25rem}p{margin:0;color:#c5c6d0;line-height:1.5}.pill{display:inline-block;margin-top:16px;border-radius:9999px;background:#3f4759;color:#dce5f9;padding:10px 16px;font-weight:700}
-</style>
-</head>
-<body>
-<div class="card">
-<h1>SSHCustom-Magisk</h1>
-<p>The Specter-style WebUI was not found in /data/adb/sshcustom/webroot. Reinstall or rebuild the module package.</p>
-<div class="pill">API is still running</div>
-</div>
-</body>
-</html>`
