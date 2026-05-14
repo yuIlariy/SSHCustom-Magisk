@@ -834,6 +834,29 @@ func run(args []string) {
 	})
 	mux.HandleFunc("/api/v1/logs/core", func(w http.ResponseWriter, r *http.Request) { serveLog(w, filepath.Join(runDir, "core.log")) })
 	mux.HandleFunc("/api/v1/logs/control", func(w http.ResponseWriter, r *http.Request) { serveLog(w, filepath.Join(runDir, "control.log")) })
+	mux.HandleFunc("/api/v1/logs/action", func(w http.ResponseWriter, r *http.Request) { serveLog(w, filepath.Join(runDir, "action.log")) })
+	// Clear endpoint truncates the named log on disk. POST is required so
+	// accidental browser pre-fetch can't wipe logs. Truncating core.log while
+	// the daemon holds it open is safe on Linux: log.SetOutput keeps writing
+	// at the (now zero) end-of-file. We seek back to 0 to avoid sparse files.
+	clearLog := func(w http.ResponseWriter, r *http.Request, name string) {
+		if r.Method != http.MethodPost {
+			writeV1Error(w, http.StatusMethodNotAllowed, errors.New("POST required"))
+			return
+		}
+		path := filepath.Join(runDir, name)
+		f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+		if err != nil {
+			writeV1Error(w, http.StatusInternalServerError, err)
+			return
+		}
+		_ = f.Close()
+		log.Printf("log cleared via API: %s", name)
+		writeV1OK(w, map[string]any{"cleared": name})
+	}
+	mux.HandleFunc("/api/v1/logs/core/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "core.log") })
+	mux.HandleFunc("/api/v1/logs/control/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "control.log") })
+	mux.HandleFunc("/api/v1/logs/action/clear", func(w http.ResponseWriter, r *http.Request) { clearLog(w, r, "action.log") })
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if b, err := os.ReadFile(filepath.Join(*workDir, "webroot", "index.html")); err == nil && len(b) > 0 {
@@ -3782,63 +3805,18 @@ func lookupPublicIPs(ctx context.Context, cfg Config, refresh bool) apiv1.Public
 		CheckedAt: time.Now().Format(time.RFC3339),
 		Provider:  publicIPProvider,
 	}
-	var wg sync.WaitGroup
-	var device, tunnel *apiv1.PublicIPDetails
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		device = lookupPublicIPDevice(ctx, cfg)
-	}()
-	go func() {
-		defer wg.Done()
-		tunnel = lookupPublicIPTunnel(ctx, cfg)
-	}()
-	wg.Wait()
-	resp.Device = device
-	resp.Tunnel = tunnel
+	// Only the tunnel side hits an external service. The device-side public IP
+	// lookup was removed in v2: on Android the Go HTTP client fails with
+	// "[::1]:53 connection refused" because dnsproxyd is restricted to system
+	// uids, and a public IP for the carrier-side leg isn't useful here. The
+	// dashboard now reads the local source IP directly from runtime state.
+	resp.Tunnel = lookupPublicIPTunnel(ctx, cfg)
 
 	publicIPCache.Lock()
 	publicIPCache.resp = resp
 	publicIPCache.expires = time.Now().Add(60 * time.Second)
 	publicIPCache.Unlock()
 	return resp
-}
-
-func lookupPublicIPDevice(ctx context.Context, cfg Config) *apiv1.PublicIPDetails {
-	start := time.Now()
-	out := &apiv1.PublicIPDetails{Path: "device"}
-	dialer := baseDialer(cfg)
-	client := &http.Client{
-		Timeout: 8 * time.Second,
-		Transport: &http.Transport{
-			DialContext:       dialer.DialContext,
-			DisableKeepAlives: true,
-		},
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+publicIPProvider+publicIPPath, nil)
-	if err != nil {
-		out.Error = err.Error()
-		return out
-	}
-	res, err := client.Do(req)
-	if err != nil {
-		out.Error = err.Error()
-		out.LatencyMS = time.Since(start).Milliseconds()
-		return out
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		out.Error = res.Status
-		out.LatencyMS = time.Since(start).Milliseconds()
-		return out
-	}
-	body, err := io.ReadAll(io.LimitReader(res.Body, 64*1024))
-	if err != nil {
-		out.Error = err.Error()
-		out.LatencyMS = time.Since(start).Milliseconds()
-		return out
-	}
-	return parsePublicIPDetails("device", body, time.Since(start))
 }
 
 func lookupPublicIPTunnel(ctx context.Context, cfg Config) *apiv1.PublicIPDetails {

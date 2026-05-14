@@ -264,7 +264,7 @@
       max-height: 52vh;
       overflow: auto;
     }
-    .runtime-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .runtime-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
     .runtime-tabs .chip { cursor: pointer; }
 
     .nav-bar {
@@ -355,6 +355,27 @@
     .toast.open { transform: translateX(-50%) translateY(0); }
     .toast.error { background: var(--error-container); color: var(--on-error-container); }
 
+    .about-row { display: flex; gap: 14px; align-items: center; }
+    .about-mark {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--primary-container);
+      color: var(--on-primary-container);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+    .about-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .about-link:hover { text-decoration: underline; }
+
     @media (max-width: 620px) {
       #pages { padding-inline: 12px; }
       .info-grid, .button-row, .field-grid { grid-template-columns: 1fr; }
@@ -375,6 +396,7 @@
     </header>
 
     <main id="pages">
+      <!-- HOME -->
       <section id="page-home">
         <div class="card hero-card">
           <div class="hero-card__body">
@@ -399,9 +421,9 @@
             <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
           </div>
           <div class="card info-card">
-            <p class="info-label">Device Public IP</p>
-            <p class="info-value" id="deviceIp">Unavailable</p>
-            <span class="supporting-text" id="deviceIpMeta">Waiting for device lookup</span>
+            <p class="info-label">Device IP</p>
+            <p class="info-value" id="deviceIp">--</p>
+            <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
           </div>
           <div class="card info-card">
             <p class="info-label">Runtime</p>
@@ -416,6 +438,7 @@
         </div>
       </section>
 
+      <!-- PROFILES -->
       <section id="page-profiles" hidden>
         <div class="button-row">
           <button class="md3-filled" onclick="openProfileEditor('')">New Profile</button>
@@ -425,61 +448,9 @@
         <div class="list-container" id="profilesList"></div>
       </section>
 
-      <section id="page-network" hidden>
-        <h2 class="section-pill">DNS</h2>
-        <div class="list-container">
-          <div class="list-item">
-            <div class="li-icon">DNS</div>
-            <div class="list-item-content" style="flex:1">
-              <div class="toggle-text">DNS Mode</div>
-              <span class="supporting-text">Applies to SSHCustom endpoint resolution. Device DNS remains default.</span>
-            </div>
-            <select id="dnsMode" class="select-shell" style="max-width:220px">
-              <option value="device">Device default</option>
-              <option value="google">Google DNS</option>
-              <option value="cloudflare">Cloudflare DNS</option>
-              <option value="custom">Custom DNS</option>
-            </select>
-          </div>
-          <div class="list-item" id="customDnsRow" hidden>
-            <div class="li-icon">IP</div>
-            <div class="list-item-content" style="flex:1">
-              <div class="toggle-text">Custom Resolvers</div>
-              <input id="customDnsServers" class="field" placeholder="1.1.1.1, 8.8.8.8">
-            </div>
-          </div>
-        </div>
-
-        <h2 class="section-pill">Sharing</h2>
-        <div class="list-container">
-          <div class="list-item">
-            <div class="li-icon">HS</div>
-            <div class="list-item-content">
-              <div class="toggle-text">Share Hotspot TCP Tunnel</div>
-              <span class="supporting-text">Enabled by default for tethered clients over IPv4 TCP.</span>
-            </div>
-            <div class="spacer"></div>
-            <button id="hotspotSwitch" class="switch" onclick="toggleHotspot()" aria-label="Toggle hotspot"></button>
-          </div>
-          <div class="list-item">
-            <div class="li-icon">TP</div>
-            <div class="list-item-content">
-              <div class="toggle-text">Transparent IPv4 TCP</div>
-              <span class="supporting-text" id="transparentMeta">iptables REDIRECT status unavailable</span>
-            </div>
-          </div>
-          <div class="list-item">
-            <div class="li-icon">S5</div>
-            <div class="list-item-content">
-              <div class="toggle-text">SOCKS5 Local Proxy</div>
-              <span class="supporting-text" id="socksMeta">SOCKS status unavailable</span>
-            </div>
-          </div>
-        </div>
-        <button class="md3-filled" onclick="saveNetwork()">Apply Network Settings</button>
-      </section>
-
+      <!-- RUNTIME -->
       <section id="page-runtime" hidden>
+        <h2 class="section-pill">Details</h2>
         <div class="info-grid">
           <div class="card info-card primary">
             <p class="info-label">SSH Pool</p>
@@ -512,52 +483,109 @@
             <span class="supporting-text" id="resolverMeta">no DNS activity yet</span>
           </div>
         </div>
+
+        <h2 class="section-pill">Paths</h2>
+        <div class="terminal" id="pathsBox">Loading paths...</div>
+
         <h2 class="section-pill">Logs</h2>
         <div class="runtime-tabs">
           <button class="chip primary" id="coreLogTab" onclick="setLogKind('core')">Core</button>
           <button class="chip" id="controlLogTab" onclick="setLogKind('control')">Control</button>
-          <button class="md3-tonal" onclick="loadLog()">Refresh Log</button>
+          <button class="chip" id="actionLogTab" onclick="setLogKind('action')">Action</button>
+          <div class="spacer"></div>
+          <button class="md3-tonal" onclick="loadLog()">Refresh</button>
+          <button class="md3-tonal md3-danger" onclick="clearCurrentLog()">Clear Log</button>
         </div>
         <pre class="terminal" id="runtimeLog">Loading log...</pre>
       </section>
 
+      <!-- SETTINGS -->
       <section id="page-settings" hidden>
-        <h2 class="section-pill">Compatibility</h2>
+        <h2 class="section-pill">DNS</h2>
         <div class="list-container">
           <div class="list-item">
-            <div class="li-icon">TLS</div>
-            <div class="list-item-content">
-              <div class="toggle-text">Permissive TLS/SNI</div>
-              <span class="supporting-text">Kept for carrier payload compatibility.</span>
+            <div class="li-icon">DNS</div>
+            <div class="list-item-content" style="flex:1">
+              <div class="toggle-text">DNS Mode</div>
+              <span class="supporting-text">Applies to SSHCustom endpoint resolution. Device DNS is unaffected.</span>
             </div>
-            <div class="spacer"></div>
-            <span class="chip warn">compat</span>
+            <select id="dnsMode" class="select-shell" style="max-width:220px">
+              <option value="device">Device default</option>
+              <option value="google">Google DNS</option>
+              <option value="cloudflare">Cloudflare DNS</option>
+              <option value="custom">Custom DNS</option>
+            </select>
           </div>
-          <div class="list-item">
-            <div class="li-icon">SSH</div>
-            <div class="list-item-content">
-              <div class="toggle-text">Permissive SSH Host Keys</div>
-              <span class="supporting-text">Kept for maximum server compatibility.</span>
+          <div class="list-item" id="customDnsRow" hidden>
+            <div class="li-icon">IP</div>
+            <div class="list-item-content" style="flex:1">
+              <div class="toggle-text">Custom Resolvers</div>
+              <input id="customDnsServers" class="field" placeholder="1.1.1.1, 8.8.8.8">
             </div>
-            <div class="spacer"></div>
-            <span class="chip warn">compat</span>
           </div>
         </div>
 
-        <h2 class="section-pill">Paths</h2>
-        <div class="terminal" id="pathsBox">Loading paths...</div>
+        <h2 class="section-pill">Sharing</h2>
+        <div class="list-container">
+          <div class="list-item">
+            <div class="li-icon">HS</div>
+            <div class="list-item-content" style="flex:1">
+              <div class="toggle-text">Share Hotspot TCP Tunnel</div>
+              <span class="supporting-text">Tether IPv4 TCP through SSHCustom for connected clients.</span>
+            </div>
+            <div class="spacer"></div>
+            <button id="hotspotSwitch" class="switch" onclick="toggleHotspot()" aria-label="Toggle hotspot"></button>
+          </div>
+          <div class="list-item">
+            <div class="li-icon">TP</div>
+            <div class="list-item-content">
+              <div class="toggle-text">Transparent IPv4 TCP</div>
+              <span class="supporting-text" id="transparentMeta">iptables REDIRECT status unavailable</span>
+            </div>
+          </div>
+          <div class="list-item">
+            <div class="li-icon">S5</div>
+            <div class="list-item-content">
+              <div class="toggle-text">SOCKS5 Local Proxy</div>
+              <span class="supporting-text" id="socksMeta">SOCKS status unavailable</span>
+            </div>
+          </div>
+        </div>
+        <button class="md3-filled" onclick="saveNetwork()">Apply Network Settings</button>
+
+        <h2 class="section-pill">About</h2>
+        <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">
+          <div class="about-row">
+            <div class="about-mark">SC</div>
+            <div style="flex:1;min-width:0">
+              <p class="hero-title">SSHCustom-Magisk</p>
+              <p class="supporting-text" id="aboutVersion">version --</p>
+            </div>
+          </div>
+          <p class="supporting-text">
+            Built by <strong>GoodyOG</strong>. SSH-tunnel routing for rooted Android via Magisk and KernelSU.
+          </p>
+          <div class="chip-row">
+            <a class="chip primary about-link" href="https://github.com/GoodyOG/SSHCustom_Magisk" target="_blank" rel="noopener">Repository</a>
+            <a class="chip about-link" href="https://github.com/GoodyOG/SSHCustom_Magisk/issues" target="_blank" rel="noopener">Report Issue</a>
+            <a class="chip about-link" href="https://github.com/GoodyOG/SSHCustom_Magisk/releases" target="_blank" rel="noopener">Releases</a>
+          </div>
+          <p class="supporting-text" style="margin:0">
+            Module and daemon: Apache-2.0. Companion app: GPL-3.0.
+          </p>
+        </div>
       </section>
     </main>
 
     <nav class="nav-bar" aria-label="Main navigation">
       <button class="nav-tab active" data-page="home" onclick="showPage('home')"><span class="nav-icon">H</span><span class="nav-label">Home</span></button>
       <button class="nav-tab" data-page="profiles" onclick="showPage('profiles')"><span class="nav-icon">P</span><span class="nav-label">Profiles</span></button>
-      <button class="nav-tab" data-page="network" onclick="showPage('network')"><span class="nav-icon">N</span><span class="nav-label">Network</span></button>
       <button class="nav-tab" data-page="runtime" onclick="showPage('runtime')"><span class="nav-icon">R</span><span class="nav-label">Runtime</span></button>
       <button class="nav-tab" data-page="settings" onclick="showPage('settings')"><span class="nav-icon">S</span><span class="nav-label">Settings</span></button>
     </nav>
   </div>
 
+  <!-- PROFILE EDITOR MODAL -->
   <div class="modal-backdrop" id="profileModal" onclick="closeModalOnBackdrop(event)">
     <div class="modal">
       <div class="modal-head">
@@ -581,7 +609,7 @@
         </div>
         <div>
           <p class="field-label">SSH Host</p>
-          <input class="field" id="pfHost">
+          <input class="field" id="pfHost" placeholder="hostname or IP">
         </div>
         <div>
           <p class="field-label">SSH Port</p>
@@ -594,10 +622,6 @@
         <div>
           <p class="field-label">Password</p>
           <input class="field" id="pfPass" type="password">
-        </div>
-        <div class="field-full">
-          <p class="field-label">Fallback IPs</p>
-          <input class="field" id="pfFallback" placeholder="comma separated">
         </div>
         <div id="proxyFields">
           <p class="field-label">Proxy Host</p>
@@ -615,7 +639,7 @@
           <div class="list-item" style="padding-inline:0;background:transparent">
             <div class="list-item-content">
               <div class="toggle-text">Payload Injection</div>
-              <span class="supporting-text">Use payload before SSH or after proxy socket depending on mode.</span>
+              <span class="supporting-text">Send payload before SSH or after the proxy socket, depending on the selected mode.</span>
             </div>
             <div class="spacer"></div>
             <button id="payloadSwitch" class="switch" onclick="togglePayload()"></button>
@@ -628,9 +652,22 @@
       </div>
       <div class="button-row">
         <button class="md3-tonal" onclick="saveProfile(false,false)">Save</button>
-        <button class="md3-filled" onclick="saveProfile(true,false)">Save and Use</button>
+        <button class="md3-filled" onclick="saveProfile(true,true)">Save, Use &amp; Restart</button>
       </div>
-      <button class="md3-tonal" onclick="saveProfile(true,true)">Save, Use, and Restart</button>
+    </div>
+  </div>
+
+  <!-- CONFIRM DIALOG -->
+  <div class="modal-backdrop" id="confirmModal" onclick="closeConfirmOnBackdrop(event)">
+    <div class="modal" style="max-width:480px">
+      <div class="modal-head">
+        <h3 class="modal-title" id="confirmTitle">Confirm</h3>
+      </div>
+      <p class="supporting-text" id="confirmBody" style="margin:0"></p>
+      <div class="button-row">
+        <button class="md3-tonal" onclick="resolveConfirm(false)">Cancel</button>
+        <button class="md3-filled md3-danger" id="confirmAccept" onclick="resolveConfirm(true)">Confirm</button>
+      </div>
     </div>
   </div>
 
@@ -641,10 +678,12 @@
     let statusData = null;
     let configData = null;
     let profilesData = { selected_id: '', profiles: [] };
+    let pathsData = {};
     let currentPage = 'home';
     let currentLog = 'core';
     let profileEditId = '';
     let toastTimer = null;
+    let confirmResolver = null;
 
     const $ = (id) => document.getElementById(id);
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -660,7 +699,7 @@
       return envelope.data;
     }
     async function postV1(path, data, timeout = 10000) {
-      return v1(path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data), timeout });
+      return v1(path, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data || {}), timeout });
     }
 
     function toast(message, kind = '') {
@@ -697,13 +736,13 @@
 
     function showPage(page) {
       currentPage = page;
-      for (const id of ['home','profiles','network','runtime','settings']) {
-        $('page-' + id).hidden = id !== page;
+      for (const id of ['home','profiles','runtime','settings']) {
+        const el = $('page-' + id);
+        if (el) el.hidden = id !== page;
       }
       document.querySelectorAll('.nav-tab').forEach(btn => btn.classList.toggle('active', btn.dataset.page === page));
       if (page === 'profiles') loadProfiles();
       if (page === 'runtime') { loadDiagnostics(); loadLog(); }
-      if (page === 'settings') renderSettings();
     }
 
     async function loadStatus() {
@@ -711,7 +750,10 @@
         const data = await v1('/status');
         statusData = data.runtime;
         configData = data.config;
+        pathsData = data.paths || {};
         renderStatus(data);
+        renderPaths();
+        renderAbout();
       } catch (e) {
         renderOffline();
       }
@@ -733,6 +775,15 @@
       if (s.dns_mode || (cfg.dns && cfg.dns.mode)) chips.push(`<span class="chip">dns: ${esc(s.dns_mode || cfg.dns.mode)}</span>`);
       if (s.interface) chips.push(`<span class="chip">via: ${esc(s.interface)}</span>`);
       $('heroChips').innerHTML = chips.join('');
+
+      // Local Device IP comes from the daemon's pure-Go route probe (UDP connect
+      // trick to read LocalAddr without sending a packet). No external call.
+      $('deviceIp').textContent = s.source_ip || '--';
+      const meta = [];
+      if (s.interface) meta.push('via ' + s.interface);
+      if (s.gateway) meta.push('gateway ' + s.gateway);
+      $('deviceIpMeta').textContent = meta.length ? meta.join(' / ') : (s.network_online ? 'route detected' : 'no network route');
+
       $('runtimeValue').textContent = s.uptime_seconds ? fmtUptime(s.uptime_seconds) : '--';
       $('runtimeMeta').textContent = [s.selected_mode, s.transport_chain].filter(Boolean).join(' / ') || 'No active session';
       $('perfValue').textContent = (s.cpu_percent || 0).toFixed(1) + '% CPU';
@@ -751,7 +802,6 @@
       $('transparentMeta').textContent = s.transparent_running ? 'listening on ' + (s.transparent_addr || 'transparent port') : 'not running';
       $('socksMeta').textContent = s.socks_running ? 'listening on ' + (s.socks_addr || 'SOCKS port') : 'not running';
       renderNetworkConfig(cfg);
-      renderSettings(data);
     }
 
     function renderOffline() {
@@ -764,15 +814,23 @@
       $('heroChips').innerHTML = '<span class="chip error">offline</span>';
     }
 
+    function renderPaths() {
+      $('pathsBox').textContent = Object.keys(pathsData).length
+        ? Object.entries(pathsData).map(([k,v]) => k + ': ' + v).join('\n')
+        : 'Paths are available when the daemon is online.';
+    }
+
+    function renderAbout() {
+      const v = (statusData && statusData.version) || '--';
+      $('aboutVersion').textContent = 'version ' + v;
+    }
+
     async function loadPublicIP(refresh = false) {
       try {
         const data = await v1('/network/public-ip' + (refresh ? '?refresh=1' : ''), { timeout: 15000 });
-        $('deviceIp').textContent = data.device && data.device.ok ? data.device.ip : 'Unavailable';
-        $('deviceIpMeta').textContent = ipMeta(data.device);
         $('tunnelIp').textContent = data.tunnel && data.tunnel.ok ? data.tunnel.ip : 'Unavailable';
         $('tunnelIpMeta').textContent = ipMeta(data.tunnel);
       } catch (e) {
-        $('deviceIpMeta').textContent = 'lookup unavailable';
         $('tunnelIpMeta').textContent = 'lookup unavailable';
       }
     }
@@ -863,7 +921,6 @@
       $('pfPort').value = p.ssh && p.ssh.port || 22;
       $('pfUser').value = p.ssh && p.ssh.username || '';
       $('pfPass').value = p.ssh && p.ssh.password || '';
-      $('pfFallback').value = p.ssh && p.ssh.fallback_ips ? p.ssh.fallback_ips.join(', ') : '';
       $('pfProxyHost').value = p.transport && p.transport.http_proxy && p.transport.http_proxy.host || '';
       $('pfProxyPort').value = p.transport && p.transport.http_proxy && p.transport.http_proxy.port || 80;
       $('pfSni').value = p.transport && p.transport.tls && p.transport.tls.server_name || '';
@@ -886,10 +943,10 @@
     }
     function togglePayload() { $('payloadSwitch').classList.toggle('on'); renderPayloadFields(); }
     function renderPayloadFields() { $('payloadFields').hidden = !$('payloadSwitch').classList.contains('on'); }
+
     async function saveProfile(select, restart) {
       try {
         const mode = $('pfMode').value;
-        const fb = $('pfFallback').value.split(',').map(s => s.trim()).filter(Boolean);
         const usesProxy = mode.includes('http_proxy');
         const usesTLS = mode.includes('tls');
         const req = {
@@ -902,8 +959,10 @@
             port: parseInt($('pfPort').value, 10) || 22,
             username: $('pfUser').value.trim(),
             password: $('pfPass').value,
-            auth_type: 'password',
-            fallback_ips: fb.length ? fb : undefined
+            auth_type: 'password'
+            // fallback_ips removed in v2.0.0: hostnames resolve through the
+            // daemon's smart resolver. If a profile previously had fallback_ips,
+            // the daemon keeps them intact in profiles.json on save.
           },
           transport: {
             mode,
@@ -940,6 +999,7 @@
       currentLog = kind;
       $('coreLogTab').classList.toggle('primary', kind === 'core');
       $('controlLogTab').classList.toggle('primary', kind === 'control');
+      $('actionLogTab').classList.toggle('primary', kind === 'action');
       loadLog();
     }
     async function loadLog() {
@@ -949,6 +1009,34 @@
       } catch (e) {
         $('runtimeLog').textContent = 'Log unavailable: ' + e.message;
       }
+    }
+    async function clearCurrentLog() {
+      const ok = await confirmDialog('Clear ' + currentLog + ' log?', 'This permanently truncates ' + currentLog + '.log on disk. The daemon keeps writing new entries afterwards.', 'Clear');
+      if (!ok) return;
+      try {
+        await postV1('/logs/' + currentLog + '/clear', null, 6000);
+        toast(currentLog + ' log cleared.');
+        loadLog();
+      } catch (e) {
+        toast('Clear failed: ' + e.message, 'error');
+      }
+    }
+
+    function confirmDialog(title, body, acceptLabel) {
+      return new Promise(resolve => {
+        $('confirmTitle').textContent = title;
+        $('confirmBody').textContent = body;
+        $('confirmAccept').textContent = acceptLabel || 'Confirm';
+        confirmResolver = resolve;
+        $('confirmModal').classList.add('open');
+      });
+    }
+    function resolveConfirm(value) {
+      $('confirmModal').classList.remove('open');
+      if (confirmResolver) { confirmResolver(value); confirmResolver = null; }
+    }
+    function closeConfirmOnBackdrop(e) {
+      if (e.target === $('confirmModal')) resolveConfirm(false);
     }
 
     async function loadDiagnostics() {
@@ -960,13 +1048,6 @@
         $('streamsValue').textContent = String(p.streams || 0);
         $('streamsMeta').textContent = 'max target ' + (p.max_streams || '--') + ' per SSH';
       } catch (e) {}
-    }
-
-    function renderSettings(data) {
-      const paths = data && data.paths || {};
-      $('pathsBox').textContent = Object.keys(paths).length
-        ? Object.entries(paths).map(([k,v]) => k + ': ' + v).join('\n')
-        : 'Paths are available when the daemon is online.';
     }
 
     async function refreshAll() {
