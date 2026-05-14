@@ -51,11 +51,13 @@ or status change.
       embed.FS WebUI, drop legacy `/api/*`, unit tests, dead `fwmark` cleanup
 - [x] **PR 3** merged: SSE `/api/v1/events`, `/api/v1/autostart`, boot-delayed `service.sh`,
       `docs/openapi.yaml`
-- [ ] **PR 4** in progress: Companion Android app skeleton — Kotlin + Compose,
-      MD3 dynamic colors, libsu root client, foreground service with notification,
-      WebView logs screen, navigation matching WebUI tabs
-- [ ] **PR 5**: App polish — Quick Settings Tile, autostart toggle bound to API,
-      theme bridge (system Material You → CSS vars in WebView), signed APK CI release
+- [x] **PR 4** merged: Companion Android app skeleton — Gradle 8.10 + AGP 8.7 +
+      Kotlin 2.0 + Compose. Four tabs (Home/Profiles/Runtime/Settings) wired to
+      `/api/v1/*` with SSE + polling fallback. libsu for root daemon control.
+      WebView log viewer. CI builds APK alongside module ZIP.
+- [ ] **PR 5** in progress: App polish — Quick Settings Tile, foreground
+      notification driven by SSE, theme bridge (system Material You → CSS vars
+      in WebView), signed release APK via repository secrets in CI.
 - [ ] **PR 6**: README rewrite, LICENSE files (Apache-2.0 + GPL-3.0), logo asset,
       v2.0.0 git tag + GitHub Release with module ZIP and signed APK
 
