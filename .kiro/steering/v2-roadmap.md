@@ -60,10 +60,14 @@ or status change.
       release APK via repository secrets in CI. Keystore generated and
       uploaded as 4 Actions secrets (`KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
       `KEY_ALIAS`, `KEY_PASSWORD`) plus a private gist backup.
-- [ ] **PR 6** in progress: README rewrite, LICENSE files (Apache-2.0 +
+- [x] **PR 6** merged: README rewrite, LICENSE files (Apache-2.0 +
       GPL-3.0), NOTICE, CHANGELOG, abstract logo asset (vector launcher
-      + monochrome themed-icon variant + WebUI favicon), v2.0.0 git tag +
-      GitHub Release with module ZIP and signed APK
+      + monochrome themed-icon variant + WebUI favicon). v2.0.0 git tag
+      pushed; CI release job attached `SSHCustom-Magisk-v2.0.0.zip` and
+      `app-release.apk` (signed) to the GitHub Release.
+
+**v2.0.0 ships.** The repo is in production-ready shape. Future work
+is feature-driven, not rebuild-driven.
 
 ## File layout reference
 
