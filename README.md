@@ -1,7 +1,7 @@
 # SSHCustom-Magisk
 
 Magisk / KernelSU module that turns a rooted Android phone into an SSH-tunnel
-router. Bundles a self-contained Go daemon, a local WebUI, a native Android
+router. Bundle a self-contained Go daemon, a local WebUI, a native Android
 companion app, and the iptables glue that makes it all transparent.
 
 [![Build SSHCustom](https://github.com/GoodyOG/SSHCustom_Magisk/actions/workflows/build.yml/badge.svg)](https://github.com/GoodyOG/SSHCustom_Magisk/actions/workflows/build.yml)
