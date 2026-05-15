@@ -172,13 +172,11 @@
       min-height: 72px;
       padding: 14px;
       display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 12px;
+      flex-direction: column;
+      gap: 4px;
       background: var(--surface-high);
       border-radius: 14px;
     }
-    .info-card__content { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
     .info-card.primary { background: var(--primary-container); color: var(--on-primary-container); }
     .info-card__icon {
       width: 28px;
@@ -233,7 +231,7 @@
       border-radius: 12px;
     }
     .list-item-content { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .list-item .supporting-text { width: 100%; margin-top: 2px; }
+    .list-item .supporting-text { margin-top: 2px; }
     .toggle-text { font-size: 0.9375rem; font-weight: 700; line-height: 1.3; }
     .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -446,35 +444,27 @@
         <div class="info-grid">
           <div class="card info-card primary">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-            <div class="info-card__content">
-              <p class="info-label">Tunnel Exit IP</p>
-              <p class="info-value" id="tunnelIp">Unavailable</p>
-              <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
-            </div>
+            <p class="info-label">Tunnel Exit IP</p>
+            <p class="info-value" id="tunnelIp">Unavailable</p>
+            <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-            <div class="info-card__content">
-              <p class="info-label">Device IP</p>
-              <p class="info-value" id="deviceIp">--</p>
-              <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
-            </div>
+            <p class="info-label">Device IP</p>
+            <p class="info-value" id="deviceIp">--</p>
+            <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <div class="info-card__content">
-              <p class="info-label">Runtime</p>
-              <p class="info-value" id="runtimeValue">--</p>
-              <span class="supporting-text" id="runtimeMeta">No active session</span>
-            </div>
+            <p class="info-label">Runtime</p>
+            <p class="info-value" id="runtimeValue">--</p>
+            <span class="supporting-text" id="runtimeMeta">No active session</span>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <div class="info-card__content">
-              <p class="info-label">Performance</p>
-              <p class="info-value" id="perfValue">--</p>
-              <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
-            </div>
+            <p class="info-label">Performance</p>
+            <p class="info-value" id="perfValue">--</p>
+            <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
           </div>
         </div>
       </section>
@@ -548,6 +538,7 @@
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">DNS Mode</div>
+              <span class="supporting-text">Applies to SSHCustom endpoint resolution. Device DNS is unaffected.</span>
             </div>
             <select id="dnsMode" class="select-shell" style="max-width:180px">
               <option value="device">Device default</option>
@@ -555,7 +546,6 @@
               <option value="cloudflare">Cloudflare DNS</option>
               <option value="custom">Custom DNS</option>
             </select>
-            <span class="supporting-text">Applies to SSHCustom endpoint resolution. Device DNS is unaffected.</span>
           </div>
           <div class="list-item" id="customDnsRow" hidden>
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
@@ -572,23 +562,23 @@
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">Share Hotspot TCP Tunnel</div>
+              <span class="supporting-text">Tether IPv4 TCP through SSHCustom for connected clients.</span>
             </div>
             <button id="hotspotSwitch" class="switch" onclick="toggleHotspot()" aria-label="Toggle hotspot"></button>
-            <span class="supporting-text">Tether IPv4 TCP through SSHCustom for connected clients.</span>
           </div>
           <div class="list-item">
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">Transparent IPv4 TCP</div>
+              <span class="supporting-text" id="transparentMeta">iptables REDIRECT status unavailable</span>
             </div>
-            <span class="supporting-text" id="transparentMeta">iptables REDIRECT status unavailable</span>
           </div>
           <div class="list-item">
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">SOCKS5 Local Proxy</div>
+              <span class="supporting-text" id="socksMeta">SOCKS status unavailable</span>
             </div>
-            <span class="supporting-text" id="socksMeta">SOCKS status unavailable</span>
           </div>
         </div>
         <h2 class="section-pill">Boot</h2>
@@ -597,9 +587,9 @@
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">Autostart on Boot</div>
+              <span class="supporting-text">Wait for connectivity (cap 30s) then start the daemon automatically.</span>
             </div>
             <button id="autostartSwitch" class="switch" onclick="toggleAutostart()" aria-label="Toggle autostart"></button>
-            <span class="supporting-text">Wait for connectivity (cap 30s) then start the daemon automatically.</span>
           </div>
         </div>
 
@@ -815,10 +805,8 @@
       $('statusText').textContent = connected ? 'connected' : busy ? 'connecting' : 'offline';
       $('heroIcon').textContent = connected ? 'ON' : busy ? '...' : 'OFF';
       $('heroTitle').textContent = connected ? 'Tunnel Connected' : busy ? (s.state || 'Connecting') : 'Daemon offline';
-      $('heroSubtitle').textContent = s.last_error || s.last_event || (connected ? 'Transparent TCP and local SOCKS are available.' : 'Start SSHCustom-Magisk from the module action button.');
-      const chips = [];
-      if (s.selected_profile) chips.push(`<span class="chip primary">${esc(s.selected_profile)}</span>`);
-      $('heroChips').innerHTML = chips.join('');
+      $('heroSubtitle').textContent = s.last_error || s.last_event || (connected ? 'SSH pool healthy ' + (s.pool_healthy||0) + '/' + (s.pool_size||0) : 'Start SSHCustom-Magisk from the module action button.');
+      $('heroChips').innerHTML = '';
 
       // Local Device IP comes from the daemon's pure-Go route probe (UDP connect
       // trick to read LocalAddr without sending a packet). No external call.
@@ -855,7 +843,7 @@
       $('heroIcon').textContent = 'OFF';
       $('heroTitle').textContent = 'Daemon offline';
       $('heroSubtitle').textContent = 'Start SSHCustom-Magisk from the Magisk or KernelSU action button.';
-      $('heroChips').innerHTML = '<span class="chip error">offline</span>';
+      $('heroChips').innerHTML = '';
     }
 
     function renderPaths() {
@@ -1076,7 +1064,7 @@
       $('heroIcon').textContent = '...';
       $('heroTitle').textContent = 'Restarting...';
       $('heroSubtitle').textContent = 'Applying new profile and reconnecting.';
-      $('heroChips').innerHTML = '<span class="chip warn">restarting</span>';
+      $('heroChips').innerHTML = '';
     }
 
     async function waitForDaemon() {
