@@ -85,7 +85,7 @@
     #pages {
       width: min(100%, 860px);
       margin: 0 auto;
-      padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px));
+      padding: 16px 16px 80px;
     }
     section:not([hidden]) {
       display: flex;
@@ -304,10 +304,19 @@
       display: flex;
       align-items: stretch;
       justify-content: space-around;
-      min-height: 64px;
+      height: 64px;
       background: var(--surface-high);
       border-top: 1px solid var(--surface-highest);
-      padding: 0 0 env(safe-area-inset-bottom, 0px);
+      padding: 0;
+    }
+    .nav-bar::after {
+      content: "";
+      position: absolute;
+      bottom: -50px;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: var(--surface-high);
     }
     .nav-tab {
       flex: 1;
