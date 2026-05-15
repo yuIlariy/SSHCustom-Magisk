@@ -62,6 +62,3 @@ Single source of truth in [`VERSION`](VERSION). Bump it and push a `v*` tag — 
 
 Licensed under the [Apache License 2.0](LICENSE).
 
-## Credits
-
-Built by **GoodyOG**.
