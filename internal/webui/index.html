@@ -179,6 +179,11 @@
       border-radius: 14px;
     }
     .info-card__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+    .info-card--data {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+    }
     .info-card.primary { background: var(--primary-container); color: var(--on-primary-container); }
     .info-card__icon {
       width: 28px;
@@ -492,32 +497,32 @@
       <section id="page-runtime" hidden>
         <h2 class="section-pill"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Details</h2>
         <div class="info-grid">
-          <div class="card info-card primary">
+          <div class="card info-card info-card--data primary">
             <p class="info-label">SSH Pool</p>
             <p class="info-value" id="poolValue">--</p>
             <span class="supporting-text" id="poolMeta">pool unavailable</span>
           </div>
-          <div class="card info-card">
+          <div class="card info-card info-card--data">
             <p class="info-label">Streams</p>
             <p class="info-value" id="streamsValue">--</p>
             <span class="supporting-text" id="streamsMeta">no active streams</span>
           </div>
-          <div class="card info-card">
+          <div class="card info-card info-card--data">
             <p class="info-label">CPU</p>
             <p class="info-value" id="cpuValue">--</p>
             <span class="supporting-text">daemon process</span>
           </div>
-          <div class="card info-card">
+          <div class="card info-card info-card--data">
             <p class="info-label">Memory</p>
             <p class="info-value" id="memoryValue">--</p>
             <span class="supporting-text" id="memoryMeta">RSS</span>
           </div>
-          <div class="card info-card">
+          <div class="card info-card info-card--data">
             <p class="info-label">Route</p>
             <p class="info-value" id="routeValue">--</p>
             <span class="supporting-text" id="routeMeta">gateway unavailable</span>
           </div>
-          <div class="card info-card">
+          <div class="card info-card info-card--data">
             <p class="info-label">Resolver</p>
             <p class="info-value" id="resolverValue">--</p>
             <span class="supporting-text" id="resolverMeta">no DNS activity yet</span>
@@ -700,9 +705,10 @@
           <textarea class="textarea" id="pfPayload"></textarea>
         </div>
       </div>
-      <div class="button-row">
+      <div class="button-row" style="grid-template-columns:1fr 1fr 1fr">
         <button class="md3-tonal" onclick="saveProfile(false,false)">Save</button>
-        <button class="md3-filled" onclick="saveProfile(true,true)">Save, Use &amp; Restart</button>
+        <button class="md3-filled" onclick="saveProfile(true,true)">Save &amp; Restart</button>
+        <button class="md3-tonal md3-danger" id="deleteProfileBtn" onclick="deleteProfile()" style="display:none">Delete</button>
       </div>
     </div>
   </div>
@@ -1000,6 +1006,7 @@
       renderProfileModeFields();
       renderPayloadFields();
       $('profileModal').classList.add('open');
+      $('deleteProfileBtn').style.display = profileEditId ? '' : 'none';
     }
     function closeProfileEditor() { $('profileModal').classList.remove('open'); }
     function closeModalOnBackdrop(e) { if (e.target === $('profileModal')) closeProfileEditor(); }
@@ -1068,6 +1075,20 @@
         await loadProfiles();
       } catch (e) {
         toast('Profile save failed: ' + e.message, 'error');
+      }
+    }
+
+    async function deleteProfile() {
+      if (!profileEditId) return;
+      const ok = await confirmDialog('Delete Profile', 'This profile will be permanently removed.', 'Delete');
+      if (!ok) return;
+      try {
+        await postV1('/profile/delete', { id: profileEditId }, 8000);
+        closeProfileEditor();
+        toast('Profile deleted.');
+        await loadProfiles();
+      } catch (e) {
+        toast('Delete failed: ' + e.message, 'error');
       }
     }
 
