@@ -172,11 +172,13 @@
       min-height: 72px;
       padding: 14px;
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      flex-direction: row;
+      align-items: center;
+      gap: 12px;
       background: var(--surface-high);
       border-radius: 14px;
     }
+    .info-card__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
     .info-card.primary { background: var(--primary-container); color: var(--on-primary-container); }
     .info-card__icon {
       width: 28px;
@@ -231,13 +233,13 @@
       border-radius: 12px;
     }
     .list-item-content { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .list-item .supporting-text { margin-top: 2px; }
+    .list-item .supporting-text { margin-top: 2px; font-size: 0.75rem; }
     .toggle-text { font-size: 0.9375rem; font-weight: 700; line-height: 1.3; }
     .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     .select-shell, .field, .textarea {
       width: 100%;
-      min-height: 52px;
+      min-height: 48px;
       border: 1px solid var(--outline);
       border-radius: 14px;
       padding: 0 16px;
@@ -444,27 +446,35 @@
         <div class="info-grid">
           <div class="card info-card primary">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-            <p class="info-label">Tunnel Exit IP</p>
-            <p class="info-value" id="tunnelIp">Unavailable</p>
-            <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
+            <div class="info-card__text">
+              <p class="info-label">Tunnel Exit IP</p>
+              <p class="info-value" id="tunnelIp">Unavailable</p>
+              <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
+            </div>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-            <p class="info-label">Device IP</p>
-            <p class="info-value" id="deviceIp">--</p>
-            <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
+            <div class="info-card__text">
+              <p class="info-label">Device IP</p>
+              <p class="info-value" id="deviceIp">--</p>
+              <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
+            </div>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <p class="info-label">Runtime</p>
-            <p class="info-value" id="runtimeValue">--</p>
-            <span class="supporting-text" id="runtimeMeta">No active session</span>
+            <div class="info-card__text">
+              <p class="info-label">Runtime</p>
+              <p class="info-value" id="runtimeValue">--</p>
+              <span class="supporting-text" id="runtimeMeta">No active session</span>
+            </div>
           </div>
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <p class="info-label">Performance</p>
-            <p class="info-value" id="perfValue">--</p>
-            <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
+            <div class="info-card__text">
+              <p class="info-label">Performance</p>
+              <p class="info-value" id="perfValue">--</p>
+              <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
+            </div>
           </div>
         </div>
       </section>
@@ -540,7 +550,7 @@
               <div class="toggle-text">DNS Mode</div>
               <span class="supporting-text">Applies to SSHCustom endpoint resolution. Device DNS is unaffected.</span>
             </div>
-            <select id="dnsMode" class="select-shell" style="max-width:180px">
+            <select id="dnsMode" class="select-shell" style="max-width:150px">
               <option value="device">Device default</option>
               <option value="google">Google DNS</option>
               <option value="cloudflare">Cloudflare DNS</option>
@@ -596,21 +606,24 @@
         <button class="md3-filled" onclick="saveNetwork()" style="margin-top:8px">Apply &amp; Restart</button>
 
         <h2 class="section-pill">About</h2>
-        <div class="card" style="padding:20px;display:flex;flex-direction:column;gap:14px">
-          <div class="about-row">
-            <div class="about-mark"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17L10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
-            <div style="flex:1;min-width:0">
-              <p class="hero-title" style="margin:0">SSHCustom-Magisk</p>
-              <p class="supporting-text" id="aboutVersion" style="margin:2px 0 0">version --</p>
+        <div class="list-container">
+          <div class="list-item">
+            <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17L10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+            <div class="list-item-content">
+              <div class="toggle-text">SSHCustom-Magisk</div>
+              <span class="supporting-text" id="aboutVersion">version --</span>
+              <span class="supporting-text">Magisk / KernelSU module that routes Android TCP traffic through an SSH tunnel with transparent proxying.</span>
             </div>
           </div>
-          <p class="supporting-text" style="margin:0">Magisk / KernelSU module that routes Android TCP traffic through an SSH tunnel with transparent proxying.</p>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a class="chip primary about-link" href="https://github.com/GoodyOG/SSHCustom_Magisk" target="_blank" rel="noopener">Repository</a>
-            <a class="chip about-link" href="https://github.com/GoodyOG/SSHCustom_Magisk/releases" target="_blank" rel="noopener">Releases</a>
-          </div>
-          <p class="supporting-text" style="margin:0;font-size:0.75rem;opacity:0.7">Licensed under Apache-2.0</p>
+          <a class="list-item" href="https://github.com/GoodyOG/SSHCustom_Magisk" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;cursor:pointer">
+            <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/></svg></div>
+            <div class="list-item-content">
+              <div class="toggle-text">Repository</div>
+              <span class="supporting-text">github.com/GoodyOG/SSHCustom_Magisk</span>
+            </div>
+          </a>
         </div>
+        <p class="supporting-text" style="margin:4px 0 0;padding-left:14px;font-size:0.7rem;opacity:0.6">Licensed under Apache-2.0</p>
       </section>
     </main>
 
