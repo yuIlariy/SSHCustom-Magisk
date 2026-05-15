@@ -525,9 +525,9 @@
           <div class="spacer"></div>
           <button class="md3-tonal" onclick="loadLog()">Refresh</button>
           <button class="md3-tonal md3-danger" onclick="clearCurrentLog()">Clear Log</button>
-          <button class="md3-tonal" id="logToggleBtn" onclick="toggleLogVisibility()">Hide</button>
+          <button class="md3-tonal" id="logToggleBtn" onclick="toggleLogVisibility()">Show</button>
         </div>
-        <pre class="terminal" id="runtimeLog">Loading log...</pre>
+        <pre class="terminal" id="runtimeLog" hidden>Loading log...</pre>
       </section>
 
       <!-- SETTINGS -->
@@ -951,7 +951,7 @@
           <div class="li-icon">P${i + 1}</div>
           <div class="list-item-content" style="flex:1">
             <div class="toggle-text">${esc(p.name || p.id)}</div>
-            <span class="supporting-text truncate">${esc(modeName(p.transport && p.transport.mode))}</span>
+            <span class="supporting-text truncate">${esc(modeName(p.transport && p.transport.mode))}${p.transport && p.transport.payload && p.transport.payload.enabled ? ' + PL' : ''}</span>
           </div>
           ${active ? '<span class="chip primary">active</span>' : `<button class="md3-tonal" onclick="selectProfile('${esc(p.id)}')">Use</button>`}
           <button class="md3-text" onclick="openProfileEditor('${esc(p.id)}')">Edit</button>
@@ -1155,7 +1155,7 @@
       if (currentPage === 'runtime') { await loadDiagnostics(); await loadLog(); }
     }
 
-    let logVisible = true;
+    let logVisible = false;
     function toggleLogVisibility() {
       logVisible = !logVisible;
       $('runtimeLog').hidden = !logVisible;
