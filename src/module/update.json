@@ -1,6 +1,6 @@
 {
   "version": "v2.0.0",
   "versionCode": 20000,
-  "zipUrl": "https://github.com/GoodyOG/SSHCustom_Magisk/releases/latest/download/SSHCustom-Magisk-v2.0.0.zip",
+  "zipUrl": "https://github.com/GoodyOG/SSHCustom-Magisk/releases/latest/download/SSHCustom-Magisk-v2.0.0.zip",
   "changelog": "v2.0.0: 4-tab WebUI redesign with About/credits, fixed Device IP card (no external lookup needed), Clear Logs button, daemon split into version/webui/dnsx/iptables/metrics packages, embedded WebUI fallback, single VERSION source of truth, dropped legacy /api/* endpoints, unit tests for pure helpers."
 }

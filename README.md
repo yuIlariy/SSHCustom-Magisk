@@ -2,9 +2,9 @@
 
 Magisk / KernelSU module that routes Android TCP traffic through an SSH tunnel with transparent proxying.
 
-[![Build](https://github.com/GoodyOG/SSHCustom_Magisk/actions/workflows/build.yml/badge.svg)](https://github.com/GoodyOG/SSHCustom_Magisk/actions/workflows/build.yml)
+[![Build](https://github.com/GoodyOG/SSHCustom-Magisk/actions/workflows/build.yml/badge.svg)](https://github.com/GoodyOG/SSHCustom-Magisk/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/GoodyOG/SSHCustom_Magisk?sort=semver)](https://github.com/GoodyOG/SSHCustom_Magisk/releases/latest)
+[![Release](https://img.shields.io/github/v/release/GoodyOG/SSHCustom-Magisk?sort=semver)](https://github.com/GoodyOG/SSHCustom-Magisk/releases/latest)
 
 ## Screenshots
 
@@ -29,7 +29,7 @@ Runs on rooted Android (Magisk or KernelSU), `arm64-v8a` and `armeabi-v7a`.
 
 ## Install
 
-1. Download `SSHCustom-Magisk-vX.Y.Z.zip` from [Releases](https://github.com/GoodyOG/SSHCustom_Magisk/releases/latest).
+1. Download `SSHCustom-Magisk-vX.Y.Z.zip` from [Releases](https://github.com/GoodyOG/SSHCustom-Magisk/releases/latest).
 2. Flash the ZIP via Magisk/KernelSU, reboot.
 3. Tap the module action button to start.
 4. Open `http://127.0.0.1:9190/` in your browser (or via KSU-Next's module WebUI) to manage profiles.

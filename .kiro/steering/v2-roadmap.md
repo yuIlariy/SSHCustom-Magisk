@@ -2,7 +2,7 @@
 
 ## Owner
 - GitHub: `GoodyOG`
-- Repo: `GoodyOG/SSHCustom_Magisk`
+- Repo: `GoodyOG/SSHCustom-Magisk`
 
 ## Architecture
 - **Module only** — no companion Android app (removed in v2.0.3).
