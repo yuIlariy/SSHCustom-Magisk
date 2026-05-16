@@ -1045,11 +1045,11 @@ func run(args []string) {
 		var desc string
 		switch status {
 		case "running":
-			desc = "description=[ \\U0001F7E2 ] SSHCustom-Magisk - running"
+			desc = "description=[ \U0001F7E2 ] SSHCustom-Magisk - running"
 		case "standby":
-			desc = "description=[ \\U0001F7E1 ] SSHCustom-Magisk - standby"
+			desc = "description=[ \U0001F7E1 ] SSHCustom-Magisk - standby"
 		default:
-			desc = "description=[ \\U0001F534 ] SSHCustom-Magisk - disconnected"
+			desc = "description=[ \U0001F534 ] SSHCustom-Magisk - disconnected"
 		}
 		data, err := os.ReadFile(modulePropPath)
 		if err != nil {

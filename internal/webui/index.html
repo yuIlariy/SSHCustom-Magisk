@@ -462,38 +462,36 @@
           <button class="md3-tonal md3-danger" id="btnStop" onclick="controlRuntime('stop')" hidden>Stop Tunnel</button>
         </div>
 
-        <div class="info-grid">
-          <div class="card info-card">
-            <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
-            <div class="info-card__text">
-              <p class="info-label">Tunnel Exit IP</p>
-              <p class="info-value" id="tunnelIp">Unavailable</p>
-              <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
-            </div>
+        <div class="card info-card">
+          <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          <div class="info-card__text">
+            <p class="info-label">Tunnel Exit IP</p>
+            <p class="info-value" id="tunnelIp">Unavailable</p>
+            <span class="supporting-text" id="tunnelIpMeta">Waiting for tunnel lookup</span>
           </div>
-          <div class="card info-card">
-            <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-            <div class="info-card__text">
-              <p class="info-label">Device IP</p>
-              <p class="info-value" id="deviceIp">--</p>
-              <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
-            </div>
+        </div>
+        <div class="card info-card">
+          <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          <div class="info-card__text">
+            <p class="info-label">Device IP</p>
+            <p class="info-value" id="deviceIp">--</p>
+            <span class="supporting-text" id="deviceIpMeta">Local interface address</span>
           </div>
-          <div class="card info-card">
-            <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            <div class="info-card__text">
-              <p class="info-label">Tunnel Uptime</p>
-              <p class="info-value" id="runtimeValue">--</p>
-              <span class="supporting-text" id="runtimeMeta">No active session</span>
-            </div>
+        </div>
+        <div class="card info-card">
+          <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div class="info-card__text">
+            <p class="info-label">Tunnel Uptime</p>
+            <p class="info-value" id="runtimeValue">--</p>
+            <span class="supporting-text" id="runtimeMeta">No active session</span>
           </div>
-          <div class="card info-card">
-            <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            <div class="info-card__text">
-              <p class="info-label">Performance</p>
-              <p class="info-value" id="perfValue">--</p>
-              <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
-            </div>
+        </div>
+        <div class="card info-card">
+          <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          <div class="info-card__text">
+            <p class="info-label">Performance</p>
+            <p class="info-value" id="perfValue">--</p>
+            <span class="supporting-text" id="perfMeta">CPU and memory unavailable</span>
           </div>
         </div>
       </section>
@@ -920,12 +918,12 @@
       $('memoryValue').textContent = fmtBytes(s.memory_rss_bytes);
       $('memoryMeta').textContent = 'system memory ' + (s.system_mem_used_percent || 0).toFixed(0) + '% used';
       $('poolValue').textContent = (s.pool_healthy || 0) + '/' + (s.pool_size || 0);
-      $('poolMeta').textContent = (s.pool_reconnecting || 0) + ' reconnecting' + (s.pool_last_error ? ' / ' + s.pool_last_error : '');
+      $('poolMeta').textContent = (s.pool_reconnecting ? s.pool_reconnecting + ' reconnecting' : 'all healthy') + (s.pool_last_error ? ' / ' + s.pool_last_error : '');
       $('streamsValue').textContent = String(s.pool_streams || 0);
       $('streamsMeta').textContent = 'target ' + (s.pool_max_streams || '--') + ' streams per SSH';
       $('routeValue').textContent = s.interface || '--';
       $('routeMeta').textContent = s.gateway ? 'gateway ' + s.gateway : (s.source_ip || 'gateway unavailable');
-      $('resolverValue').textContent = s.resolver_method || s.dns_mode || '--';
+      $('resolverValue').textContent = s.resolver_method ? 'android_shell_dns' : (s.dns_mode || '--');
       $('resolverMeta').textContent = (s.resolved_ips || []).join(', ') || 'no DNS activity yet';
       $('transparentMeta').textContent = s.transparent_running ? 'listening on ' + (s.transparent_addr || 'transparent port') : 'not running';
       $('socksMeta').textContent = s.socks_running ? 'listening on ' + (s.socks_addr || 'SOCKS port') : 'not running';
