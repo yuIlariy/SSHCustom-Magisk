@@ -4,6 +4,32 @@ All notable changes to SSHCustom_Magisk are recorded here. Format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.8] — 2026-05-16
+
+### Added
+
+- **WebUI-X Portable compatibility.** The module WebUI now works
+  correctly when opened via MMRL's WebUI-X Portable app or any other
+  WebUI-X host (KSU-Next module WebUI, etc.).
+  - **Safe-area insets**: UI respects device status bar and navigation
+    bar heights — no more content overlap. CSS variables
+    `--window-inset-top` / `--window-inset-bottom` injected by WebUI-X
+    are consumed by the layout.
+  - **`config.json`** added to webroot — enables the "Add Shortcut"
+    button in WebUI-X's module list and configures back-button
+    interception.
+  - **`icon.png`** added to webroot (192×192 PNG rendered from the
+    existing favicon SVG) — used as the home-screen shortcut icon.
+  - **Back-button handling**: pressing back inside WebUI-X now
+    intelligently closes modals → navigates to Home → exits, instead of
+    immediately closing the WebUI.
+  - **Status bar theming**: when running inside WebUI-X the status bar
+    icons are set to light (matching the dark UI) via the module
+    JavaScript interface.
+  - **Material 3 dynamic colors**: the WebUI reads WebUI-X's injected
+    color tokens so it visually matches the device's wallpaper-based
+    theme (when available; falls back to the built-in dark palette).
+
 ## [2.0.3] — 2026-05-15
 
 ### Fixed
@@ -124,6 +150,7 @@ profiles, but the WebUI, daemon internals, and release shape all changed.
 Initial production rebuild. Tagged after the v2 work began as `v1.0.0`
 on GitHub for archival reference.
 
+[2.1.8]: https://github.com/GoodyOG/SSHCustom-Magisk/releases/tag/v2.1.8
 [2.0.3]: https://github.com/GoodyOG/SSHCustom_Magisk/releases/tag/v2.0.3
 [2.0.0]: https://github.com/GoodyOG/SSHCustom_Magisk/releases/tag/v2.0.0
 [1.0.0]: https://github.com/GoodyOG/SSHCustom_Magisk/releases/tag/v1.0.0

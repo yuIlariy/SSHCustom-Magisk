@@ -1,7 +1,7 @@
 id=sshcustom
 name=SSHCustom-Magisk
-version=v2.0.6
-versionCode=20000
+version=v2.1.8
+versionCode=20108
 author=GoodyOG
 updateJson=https://raw.githubusercontent.com/GoodyOG/SSHCustom-Magisk/main/src/module/update.json
 description=[ stopped ] SSHCustom-Magisk - SSH-tunnel routing for rooted Android. SOCKS5 + transparent IPv4 TCP, hotspot tethering share, payload injection, smart Android-DNS resolver, circuit-breaker reconnect. Dashboard at http://127.0.0.1:9190

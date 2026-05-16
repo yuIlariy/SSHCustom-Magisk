@@ -8,6 +8,10 @@
   <title>SSHCustom-Magisk</title>
   <style>
     :root {
+      /* WebUI-X inset variables (injected by the host app at runtime) */
+      --top-inset: var(--window-inset-top, 0px);
+      --bottom-inset: var(--window-inset-bottom, 0px);
+
       --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --surface: #111318;
       --on-surface: #e3e2e8;
@@ -48,7 +52,7 @@
     button { -webkit-tap-highlight-color: transparent; }
     [hidden] { display: none !important; }
 
-    .app-layout { min-height: 100vh; display: flex; flex-direction: column; }
+    .app-layout { min-height: 100vh; display: flex; flex-direction: column; padding-top: var(--top-inset); }
     .app-top-bar {
       position: sticky;
       top: 0;
@@ -85,7 +89,7 @@
     #pages {
       width: min(100%, 860px);
       margin: 0 auto;
-      padding: 16px 16px 80px;
+      padding: 16px 16px calc(80px + var(--bottom-inset));
     }
     section:not([hidden]) {
       display: flex;
@@ -304,10 +308,11 @@
       display: flex;
       align-items: stretch;
       justify-content: space-around;
-      height: 64px;
+      height: calc(64px + var(--bottom-inset));
       background: var(--surface-high);
       border-top: 1px solid var(--surface-highest);
       padding: 0;
+      padding-bottom: var(--bottom-inset);
     }
 
     .nav-tab {
@@ -370,7 +375,7 @@
     .modal-title { margin: 0; font-size: 1.1rem; font-weight: 800; }
     .toast {
       position: fixed;
-      bottom: 84px;
+      bottom: calc(84px + var(--bottom-inset));
       left: 50%;
       transform: translateX(-50%) translateY(120px);
       visibility: hidden;
@@ -728,6 +733,32 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    // --- WebUI-X Portable Integration ---
+    // Detect module interface injected by WebUI-X (global $sshcustom_magisk)
+    const wxModuleId = Object.keys(window).find(k => k.startsWith('$') && k !== '$' && typeof window[k] === 'object' && window[k] !== null && 'setLightStatusBars' in window[k]);
+    const wxInterface = wxModuleId ? window[wxModuleId] : null;
+    const isWebUIX = !!(wxInterface || window.webui);
+
+    // Set status bar icons to match dark theme when running inside WebUI-X
+    if (wxInterface) {
+      try { wxInterface.setLightStatusBars(false); } catch(e) {}
+    }
+
+    // Handle WX_ON_BACK event for back navigation inside WebUI-X
+    window.addEventListener('message', function(e) {
+      try {
+        if (typeof e.data !== 'string') return;
+        var msg = JSON.parse(e.data);
+        if (!msg || msg.type !== 'WX_ON_BACK') return;
+        // Priority: close confirm dialog > close profile modal > navigate home > exit
+        if (confirmResolver) { resolveConfirm(false); return; }
+        if (document.getElementById('profileModal').classList.contains('open')) { closeProfileEditor(); return; }
+        if (currentPage !== 'home') { showPage('home'); return; }
+        // On home page with nothing open — let WebUI-X exit
+        if (window.webui && typeof window.webui.exit === 'function') { window.webui.exit(); }
+      } catch(_) {}
+    });
+
     const API = (location.protocol === 'file:' || location.port !== '9190') ? 'http://127.0.0.1:9190' : location.origin;
     let statusData = null;
     let configData = null;
