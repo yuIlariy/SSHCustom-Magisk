@@ -31,12 +31,13 @@ Runs on rooted Android (Magisk or KernelSU), `arm64-v8a` and `armeabi-v7a`.
 
 1. Download `SSHCustom-Magisk-vX.Y.Z.zip` from [Releases](https://github.com/GoodyOG/SSHCustom-Magisk/releases/latest).
 2. Flash the ZIP via Magisk/KernelSU, reboot.
-3. Tap the module action button to start.
-4. Open the WebUI to manage profiles and save with **Save & Restart** to connect.
+3. The daemon starts automatically — the WebUI is always accessible after boot.
+4. Open the WebUI, configure a profile, and tap **Start Tunnel** to connect.
 
 **Accessing the WebUI:**
 
 - **KernelSU / KSU-Next** — open the module WebUI directly from the manager.
+- **WebUI-X Portable** — install [WebUI-X Portable](https://github.com/MMRLApp/WebUI-X-Portable) (also available on [Google Play](https://play.google.com/store/apps/details?id=com.dergoogler.mmrl.wx)). SSHCustom-Magisk appears in its module list with full edge-to-edge support. You can also **add a home screen shortcut** for instant access from the app's module list.
 - **Magisk** — install [KsuWebUI Standalone](https://github.com/KOWX712/KsuWebUIStandalone/releases), grant it root access, then open SSHCustom's WebUI from within it.
 - **Browser** — navigate to `http://127.0.0.1:9190/` on the device.
 

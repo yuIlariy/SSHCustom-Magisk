@@ -4,6 +4,42 @@ All notable changes to SSHCustom_Magisk are recorded here. Format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-05-16
+
+### Added
+
+- **Always-on daemon.** The daemon now starts automatically at boot in
+  idle mode — the WebUI at `127.0.0.1:9190` is always accessible, even
+  when the tunnel is not running. No more needing to tap the action
+  button first.
+- **Start/Stop/Restart tunnel from WebUI.** New contextual buttons on the
+  Home tab: full-width "Start Tunnel" when idle, "Restart Tunnel" +
+  "Stop Tunnel" when the tunnel is running. The daemon stays alive
+  throughout — only the tunnel lifecycle is controlled.
+- **Tunnel Uptime tracking.** The Home tab now shows tunnel uptime
+  (how long since the tunnel connected) instead of daemon uptime.
+- **module.prop state sync.** The module description in KernelSU / Magisk
+  manager and WebUI-X now reflects the tunnel state in real-time:
+  green = running, yellow = standby (no network), red = disconnected.
+- **`--idle` flag** for the daemon binary — starts in WebUI-only mode
+  without connecting the tunnel.
+- **`start-idle` action** in `sshcustom.sh` — used by `service.sh` to
+  launch the daemon without tunnel.
+
+### Changed
+
+- **Status dot always glows/pulses** — color indicates tunnel state
+  (green = connected, yellow = connecting/standby, red = disconnected).
+- **service.sh** always starts the daemon at boot. The autostart marker
+  now controls whether the tunnel auto-connects, not whether the daemon
+  runs.
+- **Runtime tab** — info cards always display in 2 columns (no mobile
+  collapse). Logs section restyled with rounded terminal, better button
+  grouping.
+- **Tunnel control is now internal** — `/api/v1/control` start/stop/restart
+  operates on the tunnel without killing/restarting the daemon process.
+- Removed `waitForDaemon` logic from WebUI since the daemon never dies.
+
 ## [2.1.8] — 2026-05-16
 
 ### Added

@@ -82,7 +82,7 @@
       box-shadow: 0 0 6px 2px var(--error);
       animation: pulse 2s ease-in-out infinite;
     }
-    .status-dot.connected { background: var(--good); box-shadow: 0 0 8px 3px var(--good); animation: none; }
+    .status-dot.connected { background: var(--good); box-shadow: 0 0 8px 3px var(--good); }
     .status-dot.connecting { background: var(--warn); box-shadow: 0 0 6px 2px var(--warn); }
     @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 
@@ -156,6 +156,7 @@
     .chip.error { background: var(--error-container); color: var(--on-error-container); }
 
     .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .button-row.full { grid-template-columns: 1fr; }
     .md3-tonal, .md3-filled, .md3-text {
       min-height: 44px;
       border: none;
@@ -284,20 +285,29 @@
     .switch.on::before { background: var(--on-primary-container); }
 
     .terminal {
-      background: var(--surface-high);
-      border-radius: var(--small);
-      padding: 12px;
-      font-family: "Courier New", monospace;
-      font-size: 0.8rem;
-      line-height: 1.5;
-      color: var(--on-surface);
+      background: var(--surface-low);
+      border: 1px solid var(--surface-highest);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-family: "JetBrains Mono", "Courier New", monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+      color: var(--on-variant);
       white-space: pre-wrap;
       word-break: break-word;
       max-height: 52vh;
       overflow: auto;
     }
-    .runtime-tabs { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .runtime-tabs .chip { cursor: pointer; }
+    .runtime-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 8px 0;
+    }
+    .runtime-tabs .chip { cursor: pointer; transition: background 0.2s, color 0.2s; }
+    .log-actions { display: flex; gap: 8px; align-items: center; }
+    .log-actions .md3-tonal { min-height: 36px; font-size: 0.8125rem; padding: 0 14px; }
 
     .nav-bar {
       position: fixed;
@@ -417,7 +427,7 @@
 
     @media (max-width: 620px) {
       #pages { padding-inline: 12px; }
-      .info-grid, .field-grid { grid-template-columns: 1fr; }
+      .field-grid { grid-template-columns: 1fr; }
       .field-full { grid-column: auto; }
       .hero-card__body { align-items: flex-start; }
       .app-title { font-size: 1.08rem; }
@@ -446,9 +456,10 @@
           </div>
         </div>
 
-        <div class="button-row">
-          <button class="md3-filled" onclick="controlRuntime('restart')">Restart Tunnel</button>
-          <button class="md3-tonal md3-danger" onclick="controlRuntime('stop')">Stop and Clean</button>
+        <div class="button-row full" id="buttonRow">
+          <button class="md3-filled" id="btnStart" onclick="controlRuntime('start')">Start Tunnel</button>
+          <button class="md3-filled" id="btnRestart" onclick="controlRuntime('restart')" hidden>Restart Tunnel</button>
+          <button class="md3-tonal md3-danger" id="btnStop" onclick="controlRuntime('stop')" hidden>Stop Tunnel</button>
         </div>
 
         <div class="info-grid">
@@ -471,7 +482,7 @@
           <div class="card info-card">
             <svg class="info-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             <div class="info-card__text">
-              <p class="info-label">Runtime</p>
+              <p class="info-label">Tunnel Uptime</p>
               <p class="info-value" id="runtimeValue">--</p>
               <span class="supporting-text" id="runtimeMeta">No active session</span>
             </div>
@@ -541,9 +552,11 @@
           <button class="chip" id="controlLogTab" onclick="setLogKind('control')">Control</button>
           <button class="chip" id="actionLogTab" onclick="setLogKind('action')">Action</button>
           <div class="spacer"></div>
-          <button class="md3-tonal" onclick="loadLog()">Refresh</button>
-          <button class="md3-tonal md3-danger" onclick="clearCurrentLog()">Clear Log</button>
-          <button class="md3-tonal" id="logToggleBtn" onclick="toggleLogVisibility()">Show</button>
+          <div class="log-actions">
+            <button class="md3-tonal" id="logToggleBtn" onclick="toggleLogVisibility()">Show</button>
+            <button class="md3-tonal" onclick="loadLog()">Refresh</button>
+            <button class="md3-tonal md3-danger" onclick="clearCurrentLog()">Clear</button>
+          </div>
         </div>
         <pre class="terminal" id="runtimeLog" hidden>Loading log...</pre>
       </section>
@@ -605,7 +618,7 @@
             <div class="li-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></div>
             <div class="list-item-content">
               <div class="toggle-text">Autostart on Boot</div>
-              <span class="supporting-text">Wait for connectivity (cap 30s) then start the daemon automatically.</span>
+              <span class="supporting-text">Wait for connectivity (cap 30s) then start the tunnel automatically.</span>
             </div>
             <button id="autostartSwitch" class="switch" onclick="toggleAutostart()" aria-label="Toggle autostart"></button>
           </div>
@@ -849,23 +862,58 @@
       const cfg = data.config || {};
       const connected = !!(s.connected && s.ssh_authenticated);
       const busy = !!(s.running && !connected);
-      $('statusDot').className = 'status-dot' + (connected ? ' connected' : busy ? ' connecting' : '');
-      $('statusText').textContent = connected ? 'connected' : busy ? 'connecting' : 'offline';
-      $('heroIcon').textContent = connected ? 'ON' : busy ? '...' : 'OFF';
-      $('heroTitle').textContent = connected ? 'Tunnel Connected' : busy ? (s.state || 'Connecting') : 'Daemon offline';
-      $('heroSubtitle').textContent = s.last_error || s.last_event || (connected ? 'SSH pool healthy ' + (s.pool_healthy||0) + '/' + (s.pool_size||0) : 'Start SSHCustom-Magisk from the module action button.');
+      const standby = !!(s.running && s.state === 'PAUSED_NO_NETWORK');
+      const tunnelActive = s.running;
+
+      // Status dot — always pulses, color reflects tunnel state
+      if (connected) {
+        $('statusDot').className = 'status-dot connected';
+        $('statusText').textContent = 'connected';
+      } else if (standby) {
+        $('statusDot').className = 'status-dot connecting';
+        $('statusText').textContent = 'standby';
+      } else if (busy) {
+        $('statusDot').className = 'status-dot connecting';
+        $('statusText').textContent = 'connecting';
+      } else {
+        $('statusDot').className = 'status-dot';
+        $('statusText').textContent = 'disconnected';
+      }
+
+      // Hero card
+      if (connected) {
+        $('heroIcon').textContent = 'ON';
+        $('heroTitle').textContent = 'Tunnel Connected';
+        $('heroSubtitle').textContent = s.last_error || s.last_event || ('SSH pool healthy ' + (s.pool_healthy||0) + '/' + (s.pool_size||0));
+      } else if (standby) {
+        $('heroIcon').textContent = '||';
+        $('heroTitle').textContent = 'Standby';
+        $('heroSubtitle').textContent = 'Waiting for network connectivity to resume tunnel.';
+      } else if (busy) {
+        $('heroIcon').textContent = '...';
+        $('heroTitle').textContent = s.state || 'Connecting';
+        $('heroSubtitle').textContent = s.last_error || s.last_event || 'Establishing SSH tunnel...';
+      } else {
+        $('heroIcon').textContent = 'OFF';
+        $('heroTitle').textContent = 'Disconnected';
+        $('heroSubtitle').textContent = 'Tap Start Tunnel to connect.';
+      }
       $('heroChips').innerHTML = '';
 
-      // Local Device IP comes from the daemon's pure-Go route probe (UDP connect
-      // trick to read LocalAddr without sending a packet). No external call.
+      // Buttons — contextual based on tunnel state
+      updateButtons(tunnelActive);
+
+      // Device IP
       $('deviceIp').textContent = s.source_ip || '--';
       const meta = [];
       if (s.interface) meta.push('via ' + s.interface);
       if (s.gateway) meta.push('gateway ' + s.gateway);
       $('deviceIpMeta').textContent = meta.length ? meta.join(' / ') : (s.network_online ? 'route detected' : 'no network route');
 
-      $('runtimeValue').textContent = s.uptime_seconds ? fmtUptime(s.uptime_seconds) : '--';
-      $('runtimeMeta').textContent = [s.selected_mode, s.transport_chain].filter(Boolean).join(' / ') || 'No active session';
+      // Tunnel Uptime — use tunnel_uptime_seconds
+      $('runtimeValue').textContent = s.tunnel_uptime_seconds ? fmtUptime(s.tunnel_uptime_seconds) : '--';
+      $('runtimeMeta').textContent = tunnelActive ? ([s.selected_mode, s.transport_chain].filter(Boolean).join(' / ') || 'Tunnel active') : 'No active session';
+
       $('perfValue').textContent = (s.cpu_percent || 0).toFixed(1) + '% CPU';
       $('perfMeta').textContent = 'RSS ' + fmtBytes(s.memory_rss_bytes) + ', system mem ' + (s.system_mem_used_percent || 0).toFixed(0) + '%';
       $('cpuValue').textContent = (s.cpu_percent || 0).toFixed(1) + '%';
@@ -884,14 +932,30 @@
       renderNetworkConfig(cfg);
     }
 
+    function updateButtons(tunnelActive) {
+      const row = $('buttonRow');
+      if (tunnelActive) {
+        row.classList.remove('full');
+        $('btnStart').hidden = true;
+        $('btnRestart').hidden = false;
+        $('btnStop').hidden = false;
+      } else {
+        row.classList.add('full');
+        $('btnStart').hidden = false;
+        $('btnRestart').hidden = true;
+        $('btnStop').hidden = true;
+      }
+    }
+
     function renderOffline() {
       statusData = null;
       $('statusDot').className = 'status-dot';
       $('statusText').textContent = 'offline';
       $('heroIcon').textContent = 'OFF';
-      $('heroTitle').textContent = 'Daemon offline';
-      $('heroSubtitle').textContent = 'Start SSHCustom-Magisk from the Magisk or KernelSU action button.';
+      $('heroTitle').textContent = 'Daemon Offline';
+      $('heroSubtitle').textContent = 'The daemon is not running. Reboot or start from module manager.';
       $('heroChips').innerHTML = '';
+      updateButtons(false);
     }
 
     function renderPaths() {
@@ -918,13 +982,16 @@
     async function controlRuntime(action) {
       try {
         await postV1('/control', { action }, 10000);
-        if (action === 'restart') {
+        if (action === 'start') {
+          toast('Starting tunnel...');
+          setTimeout(loadStatus, 1500);
+        } else if (action === 'restart') {
           toast('Restarting tunnel...');
           showRestarting();
-          await waitForDaemon();
-        } else {
-          toast('Stopping and cleaning rules...');
           setTimeout(loadStatus, 2500);
+        } else {
+          toast('Stopping tunnel...');
+          setTimeout(loadStatus, 1500);
         }
       } catch (e) {
         toast('Control failed: ' + e.message, 'error');
@@ -967,9 +1034,9 @@
         const dns = { mode };
         if (mode === 'custom') dns.servers = $('customDnsServers').value.split(',').map(s => s.trim()).filter(Boolean);
         await postV1('/config', { dns, hotspot: { enabled, tcp: enabled, dns: false }, restart: true }, 12000);
-        toast('Network settings saved. Restarting...');
+        toast('Network settings saved. Restarting tunnel...');
         showRestarting();
-        await waitForDaemon();
+        setTimeout(loadStatus, 3000);
       } catch (e) {
         toast('Network save failed: ' + e.message, 'error');
       }
@@ -1097,7 +1164,7 @@
         if (restart) {
           toast('Profile saved. Restarting tunnel...');
           showRestarting();
-          await waitForDaemon();
+          setTimeout(loadStatus, 3000);
         } else {
           toast('Profile saved.');
         }
@@ -1126,35 +1193,9 @@
       $('statusText').textContent = 'restarting';
       $('heroIcon').textContent = '...';
       $('heroTitle').textContent = 'Restarting...';
-      $('heroSubtitle').textContent = 'Applying new profile and reconnecting.';
+      $('heroSubtitle').textContent = 'Reconnecting tunnel with new settings.';
       $('heroChips').innerHTML = '';
-    }
-
-    async function waitForDaemon() {
-      // The daemon restarts itself via sshcustom.sh (kills process, starts new one).
-      // Wait up to 15s for it to come back online.
-      await new Promise(r => setTimeout(r, 2000)); // give it time to die + restart
-      for (let i = 0; i < 13; i++) {
-        try {
-          const data = await v1('/status', { timeout: 3000 });
-          // Daemon is back — refresh everything
-          statusData = data.runtime;
-          configData = data.config;
-          pathsData = data.paths || {};
-          renderStatus(data);
-          renderPaths();
-          renderAbout();
-          toast('Tunnel restarted successfully.');
-          // Reconnect SSE since the old connection died with the daemon
-          startEvents();
-          return;
-        } catch (_) {
-          await new Promise(r => setTimeout(r, 1000));
-        }
-      }
-      // Timed out but daemon might still be starting
-      toast('Daemon restarting — check status in a moment.');
-      startEvents();
+      updateButtons(true);
     }
 
     function setLogKind(kind) {
