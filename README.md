@@ -10,8 +10,8 @@ Magisk / KernelSU module that routes Android TCP traffic through an SSH tunnel w
 
 <p align="center">
   <img src="docs/screenshot_home.png" width="22%" alt="Home">
-  <img src="docs/screenshot_runtime.png" width="22%" alt="Runtime">
   <img src="docs/screenshot_profiles.png" width="22%" alt="Profiles">
+  <img src="docs/screenshot_runtime.png" width="22%" alt="Runtime">
   <img src="docs/screenshot_settings.png" width="22%" alt="Settings">
 </p>
 
