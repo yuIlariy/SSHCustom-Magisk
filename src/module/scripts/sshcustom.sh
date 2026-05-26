@@ -20,11 +20,43 @@ log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >> "$CONTROL_LOG"; }
 
 set_desc() {
   [ -f "$MODULE_PROP" ] || return 0
+  local NEW_DESC
   case "$1" in
-    running) sed -i 's/^description=.*/description=[ 🟢 ] SSHCustom-Magisk - running/' "$MODULE_PROP" 2>/dev/null ;;
-    paused) sed -i 's/^description=.*/description=[ 🟡 ] SSHCustom-Magisk - paused, waiting for network/' "$MODULE_PROP" 2>/dev/null ;;
-    *) sed -i 's/^description=.*/description=[ 🔴 ] SSHCustom-Magisk - stopped/' "$MODULE_PROP" 2>/dev/null ;;
+    running) NEW_DESC="[ ON ] SSHCustom-Magisk - running" ;;
+    paused)  NEW_DESC="[ .. ] SSHCustom-Magisk - paused, waiting for network" ;;
+    *)       NEW_DESC="[ -- ] SSHCustom-Magisk - stopped" ;;
   esac
+  # Atomic write: build full file in temp, then mv (safe on same filesystem).
+  # This avoids the sed -i corruption that blanks module.prop on some devices.
+  local TMP="${MODULE_PROP}.tmp.$$"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      description=*) echo "description=$NEW_DESC" ;;
+      *) echo "$line" ;;
+    esac
+  done < "$MODULE_PROP" > "$TMP"
+  mv -f "$TMP" "$MODULE_PROP" 2>/dev/null || rm -f "$TMP"
+}
+
+# heal_module_prop: if module.prop is missing critical fields (id, name,
+# version, author), regenerate it from known-good values. This recovers
+# from any previous sed -i corruption that left the file empty/partial.
+heal_module_prop() {
+  [ -f "$MODULE_PROP" ] || return 0
+  if ! grep -q '^id=' "$MODULE_PROP" 2>/dev/null || \
+     ! grep -q '^version=' "$MODULE_PROP" 2>/dev/null || \
+     ! grep -q '^author=' "$MODULE_PROP" 2>/dev/null; then
+    log "heal_module_prop: regenerating corrupted module.prop"
+    cat > "$MODULE_PROP" <<'PROP'
+id=sshcustom
+name=SSHCustom-Magisk
+version=v2.2.1
+versionCode=20201
+author=GoodyOG
+updateJson=https://raw.githubusercontent.com/GoodyOG/SSHCustom-Magisk/main/src/module/update.json
+description=[ -- ] SSHCustom-Magisk - stopped
+PROP
+  fi
 }
 
 pid_alive() { PID="$1"; [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; }
@@ -223,6 +255,7 @@ status_full() {
 
 boot_reset() {
   log "boot reset"
+  heal_module_prop
   rm -f "$ENABLED_FILE" "$PAUSED_FILE"
   stop_runtime
   "$WORK_DIR/net_clean.sh" >> "$CONTROL_LOG" 2>&1

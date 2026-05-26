@@ -2245,7 +2245,7 @@ func dialTCPResolved(ctx context.Context, cfg Config, host string, port int, fal
 		return c, addr, "literal_ip", []string{ip.String()}, err
 	}
 
-	if normalizeDNSMode(cfg.DNS.Mode) != "device" {
+	if normalizeDNSMode(cfg.DNS.Mode) != "device" || (cfg.DNS.Enabled && len(cfg.DNS.Servers) > 0) {
 		ips, method := resolveHostSmart(ctx, cfg, host)
 		if len(ips) > 0 {
 			var lastErr error
@@ -2323,9 +2323,16 @@ func dialTCPResolved(ctx context.Context, cfg Config, host string, port int, fal
 // Centralizing this conversion in one place means future config schema
 // changes only have to update this single function.
 func dnsCfgFromConfig(cfg Config) dnsx.Config {
+	mode := dnsx.Mode(normalizeDNSMode(cfg.DNS.Mode))
+	servers := cfg.DNS.Servers
+	// When DNS is explicitly enabled with custom servers but mode is still
+	// "device", promote to "custom" so the configured servers are actually used.
+	if cfg.DNS.Enabled && len(servers) > 0 && mode == dnsx.ModeDevice {
+		mode = dnsx.ModeCustom
+	}
 	return dnsx.Config{
-		Mode:    dnsx.Mode(normalizeDNSMode(cfg.DNS.Mode)),
-		Servers: cfg.DNS.Servers,
+		Mode:    mode,
+		Servers: servers,
 	}
 }
 

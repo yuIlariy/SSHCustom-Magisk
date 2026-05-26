@@ -11,13 +11,13 @@
     "port": 9190
   },
   "dns": {
-    "enabled": false,
-    "mode": "device",
+    "enabled": true,
+    "mode": "google",
     "hijack": false,
     "doh": false,
-    "servers": [],
+    "servers": ["8.8.8.8", "8.8.4.4"],
     "timeout_seconds": 4,
-    "note": "Device DNS is default. Google, Cloudflare, and custom modes affect SSHCustom endpoint resolution only."
+    "note": "Google DNS is default. Cloudflare, custom, and device modes available. SSHCustom uses these for endpoint resolution."
   },
   "transport": {
     "supported_modes": ["direct","http_proxy","tls_sni","http_proxy_tls_sni"],
