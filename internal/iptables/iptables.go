@@ -46,6 +46,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is the subset of daemon config needed to install rules.
@@ -115,10 +116,28 @@ func Apply(cfg Config, bypassIPs []string) error {
 
 	var errs []string
 	run := func(args ...string) {
-		if b, err := exec.Command("iptables", args...).CombinedOutput(); err != nil {
-			errs = append(errs, fmt.Sprintf("iptables %s: %v %s",
-				strings.Join(args, " "), err, strings.TrimSpace(string(b))))
+		// Always use -w 5 (wait up to 5 seconds for xtables lock).
+		// HyperOS/MIUI/OneUI frequently hold the lock via system network
+		// management services (onelink, miui_firewall, etc.). Without -w,
+		// iptables fails immediately with "Can't lock xtables.lock".
+		fullArgs := append([]string{"-w", "5"}, args...)
+		var lastErr error
+		var lastOut []byte
+		for attempt := 0; attempt < 3; attempt++ {
+			b, err := exec.Command("iptables", fullArgs...).CombinedOutput()
+			if err == nil {
+				return
+			}
+			lastErr = err
+			lastOut = b
+			// Only retry on lock contention (exit status 4)
+			if !strings.Contains(string(b), "xtables.lock") {
+				break
+			}
+			time.Sleep(time.Duration(attempt+1) * time.Second)
 		}
+		errs = append(errs, fmt.Sprintf("iptables %s: %v %s",
+			strings.Join(args, " "), lastErr, strings.TrimSpace(string(lastOut))))
 	}
 
 	// Always clean before applying. This handles the upgrade case (older
@@ -177,7 +196,7 @@ func Apply(cfg Config, bypassIPs []string) error {
 		// Errors are silently ignored — sysctl can fail if the property is
 		// already 1, and we don't want that to fail Apply() overall.
 		_ = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
-		_ = exec.Command("iptables", "-I", "FORWARD", "-j", "ACCEPT").Run()
+		_ = exec.Command("iptables", "-w", "5", "-I", "FORWARD", "-j", "ACCEPT").Run()
 	}
 
 	// Filter out errors that genuinely don't matter. "No chain/target/match"
@@ -217,28 +236,28 @@ func Cleanup(cfg Config) error {
 	// Phase 1: detach hooks from OUTPUT/PREROUTING. We run -D against every
 	// shape of rule we have ever installed to handle rolling upgrades.
 	for _, ch := range chains {
-		_ = exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "-j", ch).Run()
-		_ = exec.Command("iptables", "-t", "nat", "-D", "OUTPUT", "-j", ch).Run()
-		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-j", ch).Run()
-		_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-j", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "-j", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "OUTPUT", "-j", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-j", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-j", ch).Run()
 		for _, iface := range ifaces {
 			if strings.TrimSpace(iface) == "" {
 				continue
 			}
-			_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "-j", ch).Run()
-			_ = exec.Command("iptables", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-j", ch).Run()
+			_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "-j", ch).Run()
+			_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-j", ch).Run()
 		}
 	}
 	// Phase 2: flush and delete the chains themselves. Must come after
 	// phase 1 because iptables refuses to delete a chain still referenced
 	// by a hook.
 	for _, ch := range chains {
-		_ = exec.Command("iptables", "-t", "nat", "-F", ch).Run()
-		_ = exec.Command("iptables", "-t", "nat", "-X", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-F", ch).Run()
+		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-X", ch).Run()
 	}
 	// FORWARD ACCEPT was added unconditionally for hotspot mode; remove it
 	// even when we didn't install it this session, so legacy rules from a
 	// previous module version get cleaned up on first run.
-	_ = exec.Command("iptables", "-D", "FORWARD", "-j", "ACCEPT").Run()
+	_ = exec.Command("iptables", "-w", "5", "-D", "FORWARD", "-j", "ACCEPT").Run()
 	return nil
 }

@@ -10,8 +10,8 @@ RUN_DIR="$WORK_DIR/run"
 CONFIG_DIR="$WORK_DIR/config"
 
 ui_print "****************************************"
-ui_print " SSHCustom-Magisk v2.0.0"
-ui_print " Source rebuild + sustained throughput"
+ui_print " SSHCustom-Magisk v2.2.3"
+ui_print " SSH-tunnel routing for rooted Android"
 ui_print "****************************************"
 
 ABI="$(getprop ro.product.cpu.abi 2>/dev/null)"

@@ -1045,11 +1045,11 @@ func run(args []string) {
 		var desc string
 		switch status {
 		case "running":
-			desc = "description=[ \U0001F7E2 ] SSHCustom-Magisk - running"
+			desc = "description=[ ON ] SSHCustom-Magisk - running"
 		case "standby":
-			desc = "description=[ \U0001F7E1 ] SSHCustom-Magisk - standby"
+			desc = "description=[ .. ] SSHCustom-Magisk - standby"
 		default:
-			desc = "description=[ \U0001F534 ] SSHCustom-Magisk - disconnected"
+			desc = "description=[ -- ] SSHCustom-Magisk - disconnected"
 		}
 		data, err := os.ReadFile(modulePropPath)
 		if err != nil {
@@ -1062,7 +1062,13 @@ func run(args []string) {
 				break
 			}
 		}
-		_ = os.WriteFile(modulePropPath, []byte(strings.Join(lines, "\n")), 0644)
+		// Atomic write: temp file + rename to prevent corruption on
+		// HyperOS/MIUI where frequent state changes can race with reads.
+		tmp := modulePropPath + ".tmp"
+		if err := os.WriteFile(tmp, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+			return
+		}
+		_ = os.Rename(tmp, modulePropPath)
 	}
 
 	var tunnelCancel context.CancelFunc
