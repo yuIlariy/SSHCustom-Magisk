@@ -1,48 +1,36 @@
-// Package iptables installs and removes the SSHCustom transparent-proxy
-// chains.
+// Package iptables installs and removes the SSHCustom transparent-proxy rules
+// using TPROXY in the mangle table.
 //
-// # What this does
+// # Why TPROXY instead of REDIRECT
 //
-// We install two chains in the nat table:
+// REDIRECT (nat table) does not work on modern Android ROMs (HyperOS 3, newer
+// MIUI, OneUI 6+, ColorOS 14+) because these ROMs use UID-based fwmark policy
+// routing that bypasses the nat OUTPUT chain entirely. App traffic never hits
+// our REDIRECT rule.
 //
-//   - SSHC_OUTPUT  hooked into nat OUTPUT,  for traffic from this device.
-//   - SSHC_PREROUTING  hooked into nat PREROUTING per hotspot interface,
-//     for traffic from tethered clients.
+// TPROXY (mangle table) works because mangle OUTPUT fires BEFORE policy routing
+// decisions. We mark packets in mangle OUTPUT → kernel re-routes them via our
+// custom ip rule/table → packets arrive at lo → re-enter PREROUTING → TPROXY
+// intercepts them and delivers to our listener with the original destination
+// preserved.
 //
-// Each chain RETURNs traffic destined to private/loopback/link-local CIDRs,
-// the daemon's own bypass IPs (resolved SSH endpoint addresses), and the
-// daemon's own listener ports. Anything else hits a final
-// REDIRECT --to-ports <transparent_tcp_port>, which the kernel rewrites
-// in-place; the daemon then reads the original destination via the
-// SO_ORIGINAL_DST socket option.
+// # How it works
 //
-// # The uid-0 RETURN rule
+// 1. ip route add local default dev lo table 100
+// 2. ip rule add fwmark 0x1 table 100 pref 100
+// 3. mangle PREROUTING: -p tcp -m socket --transparent -j MARK --set-mark 0x1 (DIVERT fast-path)
+// 4. mangle PREROUTING: -p tcp -j TPROXY --on-port 10810 --tproxy-mark 0x1
+// 5. mangle OUTPUT: bypass uid-0, bypass private CIDRs, bypass SSH endpoint IPs
+// 6. mangle OUTPUT: -p tcp -j MARK --set-mark 0x1 (triggers re-route to lo)
 //
-// SSHC_OUTPUT also has an early "owner uid 0 RETURN" rule. Without it, the
-// daemon's own outbound connections (the SSH tunnel itself, DNS lookups,
-// etc.) would be redirected through itself and form an infinite loop. Since
-// we run from /data/adb/sshcustom under root (Magisk-postFsData environment),
-// matching uid 0 reliably bypasses our own traffic.
-//
-// # Bypass IPs
-//
-// The daemon passes in a list of resolved SSH endpoint IPs at apply time.
-// Each becomes a `-d <ip> RETURN` rule before the catch-all REDIRECT. This
-// is critical: without it, the SSH carrier connection itself would hit the
-// REDIRECT and form a loop.
-//
-// # Cleanup is idempotent
-//
-// Apply() always runs Cleanup() first, and Cleanup() ignores errors from
-// non-existent chains/rules. The point is that running install -> stop ->
-// install -> stop in any order leaves the iptables nat table identical.
-// Real-world Android networks reset routes constantly; the daemon must be
-// able to tear down and rebuild without leaving leftover rules.
+// The Go listener uses IP_TRANSPARENT socket option to accept connections
+// destined for arbitrary IPs. conn.LocalAddr() gives the original destination.
 package iptables
 
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -51,26 +39,28 @@ import (
 
 // Config is the subset of daemon config needed to install rules.
 type Config struct {
-	ChainsPrefix string
-	TCPPort      int
-	APIPort      int
-	SocksPort    int
-	Hotspot      bool
+	ChainsPrefix  string
+	TCPPort       int
+	APIPort       int
+	SocksPort     int
+	Hotspot       bool
 	HotspotIfaces []string
 }
 
 // Default chain prefix when none is configured.
 const DefaultPrefix = "SSHC"
 
+// TPROXY routing constants
+const (
+	tproxyMark  = "0x1/0x1" // fwmark for marked packets
+	tproxyTable = "100"     // custom routing table ID
+	tproxyPref  = "100"     // ip rule preference (priority)
+)
+
 // Default hotspot interface globs covering most modern Android tether modes.
-// wlan+ catches Wi-Fi hotspot, ap+ catches some MediaTek devices, rndis+ is
-// USB tethering, ncm+ is USB CDC-NCM tethering, bt-pan+ is Bluetooth PAN.
 var DefaultHotspotIfaces = []string{"wlan+", "swlan+", "ap+", "rndis+", "ncm+", "bt-pan+"}
 
-// privateCIDRs is the set of address ranges we always RETURN. Loopback and
-// private space must not be tunneled, link-local would never reach the
-// internet anyway, and 100.64/10 is the CGNAT range which we exclude so
-// the carrier's own infrastructure (NAT64 gateways, etc.) keeps working.
+// privateCIDRs is the set of address ranges we always bypass.
 var privateCIDRs = []string{
 	"0.0.0.0/8",
 	"10.0.0.0/8",
@@ -83,25 +73,43 @@ var privateCIDRs = []string{
 	"240.0.0.0/4",
 }
 
-// allLegacyChains lists every chain name SSHCustom has ever created in any
-// version. Cleanup() must remove all of them so users upgrading from an
-// older module don't end up with orphaned chains.
-func allLegacyChains(prefix string) []string {
-	return []string{
-		prefix + "_OUTPUT",
-		prefix + "_PREROUTING",
-		prefix + "_PROXY",
-		prefix + "_DNS",
-		prefix + "_HOTSPOT",
-		prefix + "_HOTSPOT_DNS",
+// run executes an iptables command with -w 5 (wait for lock) and retry logic.
+func run(args ...string) error {
+	fullArgs := append([]string{"-w", "5"}, args...)
+	var lastErr error
+	var lastOut []byte
+	for attempt := 0; attempt < 3; attempt++ {
+		b, err := exec.Command("iptables", fullArgs...).CombinedOutput()
+		if err == nil {
+			return nil
+		}
+		lastErr = err
+		lastOut = b
+		if !strings.Contains(string(b), "xtables.lock") {
+			break
+		}
+		time.Sleep(time.Duration(attempt+1) * time.Second)
 	}
+	return fmt.Errorf("iptables %s: %v %s", strings.Join(args, " "), lastErr, strings.TrimSpace(string(lastOut)))
 }
 
-// Apply installs the SSHCustom transparent-proxy chains. bypassIPs are the
-// resolved SSH endpoint IPs that must be excluded from REDIRECT.
-//
-// The function tolerates duplicate-rule errors from the cleanup pass but
-// returns a real error if any chain creation or rule append actually fails.
+// runIgnore executes an iptables command, ignoring errors (for cleanup).
+func runIgnore(args ...string) {
+	fullArgs := append([]string{"-w", "5"}, args...)
+	_ = exec.Command("iptables", fullArgs...).Run()
+}
+
+// ipCmd executes an ip command.
+func ipCmd(args ...string) error {
+	b, err := exec.Command("ip", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ip %s: %v %s", strings.Join(args, " "), err, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
+// Apply installs TPROXY rules in the mangle table with ip rule/route for
+// policy routing. bypassIPs are the SSH endpoint IPs that must not be proxied.
 func Apply(cfg Config, bypassIPs []string) error {
 	prefix := cfg.ChainsPrefix
 	if prefix == "" {
@@ -111,153 +119,193 @@ func Apply(cfg Config, bypassIPs []string) error {
 	if port <= 0 {
 		port = 10810
 	}
-	outChain := prefix + "_OUTPUT"
+	portStr := strconv.Itoa(port)
+
+	// Chain names
+	divertChain := prefix + "_DIVERT"
 	preChain := prefix + "_PREROUTING"
+	outChain := prefix + "_OUTPUT"
 
-	var errs []string
-	run := func(args ...string) {
-		// Always use -w 5 (wait up to 5 seconds for xtables lock).
-		// HyperOS/MIUI/OneUI frequently hold the lock via system network
-		// management services (onelink, miui_firewall, etc.). Without -w,
-		// iptables fails immediately with "Can't lock xtables.lock".
-		fullArgs := append([]string{"-w", "5"}, args...)
-		var lastErr error
-		var lastOut []byte
-		for attempt := 0; attempt < 3; attempt++ {
-			b, err := exec.Command("iptables", fullArgs...).CombinedOutput()
-			if err == nil {
-				return
-			}
-			lastErr = err
-			lastOut = b
-			// Only retry on lock contention (exit status 4)
-			if !strings.Contains(string(b), "xtables.lock") {
-				break
-			}
-			time.Sleep(time.Duration(attempt+1) * time.Second)
-		}
-		errs = append(errs, fmt.Sprintf("iptables %s: %v %s",
-			strings.Join(args, " "), lastErr, strings.TrimSpace(string(lastOut))))
-	}
-
-	// Always clean before applying. This handles the upgrade case (older
-	// chain layouts) and the crash-recovery case (daemon died holding chains).
+	// Always clean first
 	_ = Cleanup(cfg)
 
-	for _, ch := range []string{outChain, preChain} {
-		run("-t", "nat", "-N", ch)
-		run("-t", "nat", "-F", ch)
+	var errs []string
+	must := func(err error) {
+		if err != nil {
+			errs = append(errs, err.Error())
+		}
 	}
 
-	addBypasses := func(ch string, isOutput bool) {
-		// Match-by-uid only works on the OUTPUT path. nat PREROUTING runs
-		// before any uid is associated with a packet, so this rule would be
-		// a no-op (and on some kernels, an error) on PREROUTING.
-		if isOutput {
-			run("-t", "nat", "-A", ch, "-m", "owner", "--uid-owner", "0", "-j", "RETURN")
-		}
-		for _, cidr := range privateCIDRs {
-			run("-t", "nat", "-A", ch, "-d", cidr, "-j", "RETURN")
-		}
-		for _, ip := range bypassIPs {
-			ip = strings.TrimSpace(ip)
-			if ip == "" {
-				continue
-			}
-			run("-t", "nat", "-A", ch, "-d", ip, "-j", "RETURN")
-		}
-		for _, p := range []int{cfg.APIPort, cfg.SocksPort, cfg.TCPPort} {
-			if p > 0 {
-				run("-t", "nat", "-A", ch, "-p", "tcp", "--dport", strconv.Itoa(p), "-j", "RETURN")
-			}
-		}
-		run("-t", "nat", "-A", ch, "-p", "tcp", "-j", "REDIRECT", "--to-ports", strconv.Itoa(port))
+	// Step 1: Policy routing - route marked packets to loopback
+	must(ipCmd("route", "add", "local", "default", "dev", "lo", "table", tproxyTable))
+	must(ipCmd("rule", "add", "fwmark", tproxyMark, "table", tproxyTable, "pref", tproxyPref))
+
+	// Step 2: Enable IP forwarding (needed for hotspot/PREROUTING)
+	_ = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
+
+	// Step 3: Create chains
+	for _, ch := range []string{divertChain, preChain, outChain} {
+		must(run("-t", "mangle", "-N", ch))
 	}
-	addBypasses(outChain, true)
-	addBypasses(preChain, false)
 
-	// Hook into the top of OUTPUT. -I 1 means "insert at position 1", which
-	// guarantees we run before any other module's rules and before the
-	// kernel's default ACCEPT.
-	run("-t", "nat", "-I", "OUTPUT", "1", "-p", "tcp", "-j", outChain)
+	// Step 4: DIVERT chain - fast-path for established connections
+	// Packets that already have a transparent socket get marked and accepted
+	// without traversing the full TPROXY rule again.
+	must(run("-t", "mangle", "-A", divertChain, "-j", "MARK", "--set-mark", tproxyMark))
+	must(run("-t", "mangle", "-A", divertChain, "-j", "ACCEPT"))
 
+	// Step 5: PREROUTING chain
+	// 5a: Established transparent connections → DIVERT (fast-path)
+	must(run("-t", "mangle", "-A", preChain, "-p", "tcp", "-m", "socket", "--transparent", "-j", divertChain))
+	// 5b: Bypass private/local destinations
+	for _, cidr := range privateCIDRs {
+		must(run("-t", "mangle", "-A", preChain, "-d", cidr, "-j", "RETURN"))
+	}
+	// 5c: Bypass SSH endpoint IPs
+	for _, ip := range bypassIPs {
+		ip = strings.TrimSpace(ip)
+		if ip != "" {
+			must(run("-t", "mangle", "-A", preChain, "-d", ip, "-j", "RETURN"))
+		}
+	}
+	// 5d: Bypass our own ports
+	for _, p := range []int{cfg.APIPort, cfg.SocksPort, cfg.TCPPort} {
+		if p > 0 {
+			must(run("-t", "mangle", "-A", preChain, "-p", "tcp", "--dport", strconv.Itoa(p), "-j", "RETURN"))
+		}
+	}
+	// 5e: TPROXY all remaining TCP
+	must(run("-t", "mangle", "-A", preChain, "-p", "tcp", "-j", "TPROXY",
+		"--on-port", portStr, "--tproxy-mark", tproxyMark))
+
+	// Step 6: OUTPUT chain (local device traffic)
+	// 6a: Bypass daemon's own traffic (uid 0 = root, where sshcustomd runs)
+	must(run("-t", "mangle", "-A", outChain, "-m", "owner", "--uid-owner", "0", "-j", "RETURN"))
+	// 6b: Bypass private/local destinations
+	for _, cidr := range privateCIDRs {
+		must(run("-t", "mangle", "-A", outChain, "-d", cidr, "-j", "RETURN"))
+	}
+	// 6c: Bypass SSH endpoint IPs
+	for _, ip := range bypassIPs {
+		ip = strings.TrimSpace(ip)
+		if ip != "" {
+			must(run("-t", "mangle", "-A", outChain, "-d", ip, "-j", "RETURN"))
+		}
+	}
+	// 6d: Bypass our own ports
+	for _, p := range []int{cfg.APIPort, cfg.SocksPort, cfg.TCPPort} {
+		if p > 0 {
+			must(run("-t", "mangle", "-A", outChain, "-p", "tcp", "--dport", strconv.Itoa(p), "-j", "RETURN"))
+		}
+	}
+	// 6e: MARK all remaining TCP → triggers re-route via ip rule → enters PREROUTING → TPROXY
+	must(run("-t", "mangle", "-A", outChain, "-p", "tcp", "-j", "MARK", "--set-mark", tproxyMark))
+
+	// Step 7: Hook chains into PREROUTING and OUTPUT
+	must(run("-t", "mangle", "-I", "PREROUTING", "1", "-j", preChain))
+	must(run("-t", "mangle", "-I", "OUTPUT", "1", "-j", outChain))
+
+	// Step 8: Hotspot - hook PREROUTING for tethered interfaces too
 	if cfg.Hotspot {
 		ifaces := cfg.HotspotIfaces
 		if len(ifaces) == 0 {
 			ifaces = DefaultHotspotIfaces
 		}
 		for _, iface := range ifaces {
-			if strings.TrimSpace(iface) == "" {
-				continue
+			if strings.TrimSpace(iface) != "" {
+				// Already covered by the global PREROUTING jump above
+				// But ensure FORWARD accepts for tethered traffic
+				runIgnore("-I", "FORWARD", "-i", iface, "-j", "ACCEPT")
+				runIgnore("-I", "FORWARD", "-o", iface, "-j", "ACCEPT")
 			}
-			run("-t", "nat", "-I", "PREROUTING", "1", "-i", iface, "-p", "tcp", "-j", preChain)
 		}
-		// IP forwarding must be on for tethered TCP to traverse PREROUTING.
-		// Errors are silently ignored — sysctl can fail if the property is
-		// already 1, and we don't want that to fail Apply() overall.
-		_ = exec.Command("sysctl", "-w", "net.ipv4.ip_forward=1").Run()
-		_ = exec.Command("iptables", "-w", "5", "-I", "FORWARD", "-j", "ACCEPT").Run()
+		runIgnore("-I", "FORWARD", "-j", "ACCEPT")
 	}
 
-	// Filter out errors that genuinely don't matter. "No chain/target/match"
-	// and "does a matching rule exist?" come from the cleanup pre-pass when
-	// a rule we tried to delete didn't exist. "Chain already exists" comes
-	// from -N when the chain is still there from a previous run that crashed.
-	// Anything else is a real failure that should stop the daemon.
+	// Filter fatal errors
 	var fatal []string
 	for _, e := range errs {
-		if strings.Contains(e, "No chain/target/match") ||
-			strings.Contains(e, "does a matching rule exist") ||
+		// Ignore "already exists" errors from ip rule/route (idempotent)
+		if strings.Contains(e, "File exists") ||
+			strings.Contains(e, "No chain/target/match") ||
 			strings.Contains(e, "Chain already exists") {
 			continue
 		}
 		fatal = append(fatal, e)
 	}
 	if len(fatal) > 0 {
+		log.Printf("tproxy apply had %d errors (first: %s)", len(fatal), fatal[0])
 		return errors.New(strings.Join(fatal, "; "))
 	}
 	return nil
 }
 
-// Cleanup removes every SSHCustom chain and the FORWARD ACCEPT rule. Always
-// returns nil; failures here are logged via the caller's discretion but
-// don't propagate because cleanup is best-effort.
+// Cleanup removes all SSHCustom TPROXY rules, chains, ip rules, and ip routes.
 func Cleanup(cfg Config) error {
 	prefix := cfg.ChainsPrefix
 	if prefix == "" {
 		prefix = DefaultPrefix
 	}
-	chains := allLegacyChains(prefix)
+
+	divertChain := prefix + "_DIVERT"
+	preChain := prefix + "_PREROUTING"
+	outChain := prefix + "_OUTPUT"
+
+	// Also clean legacy nat-based chains from older versions
+	legacyChains := []string{
+		prefix + "_OUTPUT",
+		prefix + "_PREROUTING",
+		prefix + "_PROXY",
+		prefix + "_DNS",
+		prefix + "_HOTSPOT",
+		prefix + "_HOTSPOT_DNS",
+	}
+
+	// Phase 1: Remove jumps from built-in chains (mangle)
+	runIgnore("-t", "mangle", "-D", "PREROUTING", "-j", preChain)
+	runIgnore("-t", "mangle", "-D", "OUTPUT", "-j", outChain)
+
+	// Phase 2: Flush and delete mangle chains
+	for _, ch := range []string{divertChain, preChain, outChain} {
+		runIgnore("-t", "mangle", "-F", ch)
+		runIgnore("-t", "mangle", "-X", ch)
+	}
+
+	// Phase 3: Clean legacy nat chains
+	for _, ch := range legacyChains {
+		runIgnore("-t", "nat", "-D", "OUTPUT", "-p", "tcp", "-j", ch)
+		runIgnore("-t", "nat", "-D", "OUTPUT", "-j", ch)
+		runIgnore("-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-j", ch)
+		runIgnore("-t", "nat", "-D", "PREROUTING", "-j", ch)
+		ifaces := cfg.HotspotIfaces
+		if len(ifaces) == 0 {
+			ifaces = DefaultHotspotIfaces
+		}
+		for _, iface := range ifaces {
+			if strings.TrimSpace(iface) != "" {
+				runIgnore("-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "-j", ch)
+			}
+		}
+		runIgnore("-t", "nat", "-F", ch)
+		runIgnore("-t", "nat", "-X", ch)
+	}
+
+	// Phase 4: Remove ip rule and ip route
+	_ = exec.Command("ip", "rule", "del", "fwmark", tproxyMark, "table", tproxyTable, "pref", tproxyPref).Run()
+	_ = exec.Command("ip", "route", "del", "local", "default", "dev", "lo", "table", tproxyTable).Run()
+
+	// Phase 5: Remove FORWARD rules
+	runIgnore("-D", "FORWARD", "-j", "ACCEPT")
 	ifaces := cfg.HotspotIfaces
 	if len(ifaces) == 0 {
 		ifaces = DefaultHotspotIfaces
 	}
-
-	// Phase 1: detach hooks from OUTPUT/PREROUTING. We run -D against every
-	// shape of rule we have ever installed to handle rolling upgrades.
-	for _, ch := range chains {
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "OUTPUT", "-p", "tcp", "-j", ch).Run()
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "OUTPUT", "-j", ch).Run()
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-p", "tcp", "-j", ch).Run()
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-j", ch).Run()
-		for _, iface := range ifaces {
-			if strings.TrimSpace(iface) == "" {
-				continue
-			}
-			_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-p", "tcp", "-j", ch).Run()
-			_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-D", "PREROUTING", "-i", iface, "-j", ch).Run()
+	for _, iface := range ifaces {
+		if strings.TrimSpace(iface) != "" {
+			runIgnore("-D", "FORWARD", "-i", iface, "-j", "ACCEPT")
+			runIgnore("-D", "FORWARD", "-o", iface, "-j", "ACCEPT")
 		}
 	}
-	// Phase 2: flush and delete the chains themselves. Must come after
-	// phase 1 because iptables refuses to delete a chain still referenced
-	// by a hook.
-	for _, ch := range chains {
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-F", ch).Run()
-		_ = exec.Command("iptables", "-w", "5", "-t", "nat", "-X", ch).Run()
-	}
-	// FORWARD ACCEPT was added unconditionally for hotspot mode; remove it
-	// even when we didn't install it this session, so legacy rules from a
-	// previous module version get cleaned up on first run.
-	_ = exec.Command("iptables", "-w", "5", "-D", "FORWARD", "-j", "ACCEPT").Run()
+
 	return nil
 }

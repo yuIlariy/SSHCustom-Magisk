@@ -2751,14 +2751,17 @@ func startTransparentIfEnabled(ctx context.Context, cfg Config, pool *SSHPool, s
 		return nil
 	}
 	addr := transparentAddr(cfg)
-	ln, err := net.Listen("tcp", addr)
+	// Use TPROXY listener (IP_TRANSPARENT socket) instead of regular listener.
+	// TPROXY preserves original destination as the connection's local address,
+	// which works on all modern Android ROMs including HyperOS/MIUI.
+	ln, err := listenTPROXY(ctx, addr)
 	if err != nil {
-		log.Printf("transparent TCP listen failed on %s: %v", addr, err)
+		log.Printf("TPROXY TCP listen failed on %s: %v", addr, err)
 		st.set(func() {
 			st.TransparentEnabled = true
 			st.TransparentRunning = false
 			st.TransparentApplied = false
-			st.LastError = "transparent TCP listen failed: " + err.Error()
+			st.LastError = "TPROXY TCP listen failed: " + err.Error()
 		})
 		return nil
 	}
@@ -2826,14 +2829,11 @@ func startTransparentIfEnabled(ctx context.Context, cfg Config, pool *SSHPool, s
 
 func handleTransparentConn(ctx context.Context, c net.Conn, pool *SSHPool, cfg Config, st *State) {
 	defer c.Close()
-	tcp, ok := c.(*net.TCPConn)
-	if !ok {
-		log.Printf("transparent rejected non-TCP conn from %s", c.RemoteAddr())
-		return
-	}
-	target, err := originalDst(tcp)
+	// With TPROXY, the original destination is preserved as the local address
+	// of the accepted connection. No need for SO_ORIGINAL_DST getsockopt.
+	target, err := tproxyOriginalDst(c)
 	if err != nil {
-		log.Printf("transparent original-dst failed from %s: %v", c.RemoteAddr(), err)
+		log.Printf("tproxy original-dst failed from %s: %v", c.RemoteAddr(), err)
 		return
 	}
 	if isLocalOrBlockedTarget(target, cfg) {
