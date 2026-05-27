@@ -4,6 +4,72 @@ All notable changes to SSHCustom_Magisk are recorded here. Format is loosely
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.5] — 2026-05-27
+
+### Fixed
+
+- **SSH pool stability on CDN-fronted SSH (Cloudflare, AkamaiGHost, etc.).**
+  The pre-2.2.5 design opened a pool of 4 separate TCP connections through
+  the CDN. From the edge's perspective, that's 4 simultaneous HTTP-upgrade
+  requests from one client IP — exactly the connection-flood pattern that
+  Cloudflare's WAF rate-limits with 302 responses. Symptoms users reported:
+  pool slots cycling 4/4 → 3/4 → 4/4 every 60-90 seconds, brief download
+  stalls on each cycle, occasional full reconnects after `route mismatch
+  3/3` log lines on HyperOS.
+- **Default pool size is now 1.** Commercial VPN apps (HTTP Injector, KPN
+  Tunnel, NPV Tunnel, etc.) all use a single SSH session and rely on
+  SSH's native channel multiplexing (RFC 4254). One SSH session can carry
+  hundreds of concurrent streams — Dropbear's `max_streams_per_ssh` of 64
+  remains the soft target, and the per-channel sequence-number ceiling is
+  high enough that a single TCP socket saturates a mobile uplink. Users
+  who explicitly want parallelism for sustained downloads can still set
+  `ssh_pool_size` to 2 (direct/payload) or up to 3 (TLS) in the WebUI.
+- **Default keepalive reduced from 60s to 15s.** Cloudflare RSTs idle
+  HTTP-upgraded connections at ~50-55s, and TCP keepalive (now 20s) acts
+  as a backstop. The old 60s default fired *after* the CDN had already
+  killed the socket, causing every keepalive cycle to detect 4 dead
+  sessions at once and trigger a synchronized reconnect storm.
+- **DNS cache no longer evicted on pool-reconnect 302.** A 302 on a
+  single re-auth attempt is a per-TCP-connection rate-limit, not
+  evidence the cached IP is bad. The old behaviour invalidated the
+  cache for every other slot, forcing an unnecessary `ping`-based
+  re-resolution (2-3 seconds of subprocess overhead per slot). Primary
+  authentication still evicts on 302/301/503 because that's the one
+  case where a fresh resolve genuinely helps.
+- **HyperOS/MIUI rmnet bearer rotation no longer rebuilds the pool.**
+  Modern Android modems (Qualcomm/MediaTek under HyperOS 2/3) rotate
+  between `rmnet_data1`, `rmnet_data3`, `rmnet_data4` every 30-60s
+  during normal mobile data use. These are different PDN contexts on
+  the same APN and same physical modem — the kernel transparently
+  migrates active sockets across them and connectivity never breaks.
+  The route ticker now collapses interface names into families
+  (`mobile`/`wifi`/`ethernet`/`vpn`) and only acts on genuine medium
+  switches. Even then, a confirmed family change only triggers a
+  rebuild if the SSH pool is *also* unhealthy — keepalive failures
+  already detect real connectivity loss, and forcing a rebuild on
+  healthy sessions is exactly what creates CDN-rate-limited reconnect
+  storms.
+- **Staggered pool reconnects.** When multiple slots need to reconnect
+  simultaneously (typical pattern after a brief network blip),
+  `EnsureAsync` now spaces the reconnect goroutines 750 ms apart
+  instead of firing them all in the same 100 ms window. Cloudflare no
+  longer sees a synchronized burst of HTTP-upgrade requests from one
+  client.
+
+### Migration notes
+
+- Existing `config.json` files keep working — the in-place upgrade path
+  rewrites `ssh_pool_size` to 1 and `keepalive_seconds` to 15 only on a
+  fresh install. To adopt the new defaults on an existing install,
+  delete the `performance` block from `/data/adb/sshcustom/config.json`
+  and restart the daemon, or edit the values directly in the WebUI
+  Settings tab and tap "Apply & Restart".
+- Power users who previously relied on 4 parallel sessions for
+  download throughput should test with the new default first; in most
+  cases a single session saturates the uplink and avoids CDN
+  rate-limiting entirely. If you genuinely need parallelism (e.g.
+  multi-stream downloaders), bump `ssh_pool_size` to 2.
+
 ## [2.2.0] — 2026-05-16
 
 ### Added
@@ -186,6 +252,7 @@ profiles, but the WebUI, daemon internals, and release shape all changed.
 Initial production rebuild. Tagged after the v2 work began as `v1.0.0`
 on GitHub for archival reference.
 
+[2.2.5]: https://github.com/GoodyOG/SSHCustom-Magisk/releases/tag/v2.2.5
 [2.1.8]: https://github.com/GoodyOG/SSHCustom-Magisk/releases/tag/v2.1.8
 [2.0.3]: https://github.com/GoodyOG/SSHCustom_Magisk/releases/tag/v2.0.3
 [2.0.0]: https://github.com/GoodyOG/SSHCustom_Magisk/releases/tag/v2.0.0

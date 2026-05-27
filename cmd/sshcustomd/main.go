@@ -1319,7 +1319,11 @@ func connectionManager(ctx context.Context, cfg Config, p Profile, st *State) {
 
 		stopSocks := startSocksIfEnabled(ctx, cfg, pool, st)
 		stopTransparent := startTransparentIfEnabled(ctx, cfg, pool, st, res)
-		keepaliveSeconds := secondsDefault(cfg.Performance.KeepAliveSec, 60)
+		// Keepalive default 15s — Cloudflare and most CDNs RST idle
+		// HTTP-upgraded connections after ~50-60s, so we must probe well
+		// inside that window. 60s used to be the default and caused
+		// constant pool-slot churn through CDN-fronted SSH.
+		keepaliveSeconds := secondsDefault(cfg.Performance.KeepAliveSec, 15)
 		keepalive := time.NewTicker(time.Duration(keepaliveSeconds) * time.Second)
 		// 10s route check: halves subprocess overhead vs 3s without hurting reconnect speed.
 		routeTicker := time.NewTicker(10 * time.Second)
@@ -1367,13 +1371,26 @@ func connectionManager(ctx context.Context, cfg Config, p Profile, st *State) {
 				}
 				if lastRouteSig != "" && newSig != "" && newSig != lastRouteSig {
 					routeChangeMismatches++
-					log.Printf("route mismatch %d/3: old=%q new=%q", routeChangeMismatches, lastRouteSig, newSig)
-					if routeChangeMismatches >= 3 {
-						log.Printf("route changed confirmed; rebuilding SSH runtime")
+					log.Printf("route family changed %d/6: old=%q new=%q (will only rebuild if pool is also unhealthy)", routeChangeMismatches, lastRouteSig, newSig)
+					// 6 consecutive checks × 10s = 60s of confirmed family
+					// change before acting. Even then, only rebuild if the
+					// SSH pool has zero healthy slots — keepalive failures
+					// already detect actual connectivity loss, and forcing
+					// a rebuild on healthy sessions just creates reconnect
+					// storms (the very thing CDN rate-limiting punishes).
+					if routeChangeMismatches >= 6 && pool.Healthy() == 0 {
+						log.Printf("route family change confirmed AND pool is unhealthy; rebuilding SSH runtime")
 						delay = time.Second
-						stopActive("network route changed; rebuilding SSH runtime")
+						stopActive("network family changed and pool unhealthy; rebuilding")
 						active = false
 						break
+					}
+					if routeChangeMismatches >= 6 {
+						// Family flapped but pool is still serving traffic.
+						// Adopt the new signature and reset; trust the pool.
+						log.Printf("route family changed but pool still healthy %d/%d; adopting new signature without rebuild", pool.Healthy(), pool.Size())
+						lastRouteSig = newSig
+						routeChangeMismatches = 0
 					}
 					// Do NOT update lastRouteSig yet — wait for confirmation
 				} else {
@@ -1471,22 +1488,33 @@ func (c *pooledNetConn) Close() error {
 func newSSHPool(ctx context.Context, cfg Config, p Profile, first *xssh.Client, st *State) *SSHPool {
 	size := cfg.Performance.SSHPoolSize
 	if size <= 0 {
-		size = 4
+		// Default to 1 SSH session — same as commercial VPN apps
+		// (HTTP Injector, NPV Tunnel, KPN Tunnel, etc.). SSH protocol
+		// natively multiplexes channels (RFC 4254), so one TCP connection
+		// can carry hundreds of simultaneous streams. Multiple parallel
+		// sessions to the same Cloudflare-fronted host trigger CDN
+		// rate-limiting (302 responses) without giving any throughput
+		// benefit, because Dropbear's per-channel sequence numbers
+		// already saturate a single TCP socket.
+		size = 1
 	}
 	if usesTLS(p) {
-		// 4 TLS sessions: enough parallelism for sustained download + browsing.
-		if size > 4 {
-			size = 4
+		// TLS handshake is expensive; cap at 3 sessions for power users.
+		if size > 3 {
+			size = 3
 		}
 		if size < 1 {
 			size = 1
 		}
 	} else {
-		if size < 2 {
-			size = 2
+		// Direct/payload mode through CDNs: keep at most 2 sessions.
+		// One is the safe default; users who explicitly want parallelism
+		// for sustained downloads can bump it to 2 in Settings.
+		if size < 1 {
+			size = 1
 		}
-		if size > 6 {
-			size = 6
+		if size > 2 {
+			size = 2
 		}
 	}
 	maxStreams := cfg.Performance.MaxStreamsPerSSH
@@ -1619,6 +1647,12 @@ func (p *SSHPool) EnsureAsync() {
 	if closed {
 		return
 	}
+	// Stagger reconnects so multiple dead slots don't all hit Cloudflare
+	// in the same 100ms window. A burst of simultaneous HTTP-upgrade
+	// requests from one client IP is exactly what triggers CDN rate
+	// limiting (302 responses), turning a recoverable single-slot
+	// failure into a pool-wide reconnect storm.
+	staggerIdx := 0
 	for _, it := range items {
 		it.mu.Lock()
 		need := it.client == nil && !it.reconnecting
@@ -1627,7 +1661,20 @@ func (p *SSHPool) EnsureAsync() {
 		}
 		it.mu.Unlock()
 		if need {
-			go p.reconnectSlot(it)
+			delay := time.Duration(staggerIdx) * 750 * time.Millisecond
+			staggerIdx++
+			slot := it
+			go func() {
+				if delay > 0 {
+					if !sleepCtx(p.ctx, delay) {
+						slot.mu.Lock()
+						slot.reconnecting = false
+						slot.mu.Unlock()
+						return
+					}
+				}
+				p.reconnectSlot(slot)
+			}()
 		}
 	}
 	p.st.SetPoolSnapshot(p.Snapshot())
@@ -1643,7 +1690,10 @@ func (p *SSHPool) reconnectSlot(it *pooledSSH) {
 	default:
 	}
 	log.Printf("SSH pool slot %d connecting", it.id)
-	client, res, err := attemptSSHAuth(p.ctx, p.cfg, p.profile)
+	// Pool reconnects pass allowDNSEvict=false so that a single slot
+	// hitting CDN rate-limiting (302) on its idle reconnect doesn't
+	// invalidate the cached IP for every other healthy slot.
+	client, res, err := attemptSSHAuthWithEvict(p.ctx, p.cfg, p.profile, false)
 	it.mu.Lock()
 	if err != nil {
 		it.lastErr = err.Error()
@@ -1981,7 +2031,16 @@ func (c *prefixConn) Read(p []byte) (int, error) {
 }
 
 func attemptSSHAuth(ctx context.Context, cfg Config, p Profile) (*xssh.Client, ProbeResult, error) {
-	conn, res, err := openPreparedSSHConn(ctx, cfg, p)
+	return attemptSSHAuthWithEvict(ctx, cfg, p, true)
+}
+
+// attemptSSHAuthWithEvict allows callers to opt out of DNS cache eviction on
+// CDN rate-limit responses (302/301/503). Pool reconnects pass false because
+// a 302 on a single re-auth attempt is a per-TCP-connection rate-limit, not
+// evidence the cached IP itself is bad — evicting forces unrelated reconnects
+// to re-resolve too, adding 2-3s of `ping` subprocess overhead per slot.
+func attemptSSHAuthWithEvict(ctx context.Context, cfg Config, p Profile, allowDNSEvict bool) (*xssh.Client, ProbeResult, error) {
+	conn, res, err := openPreparedSSHConn(ctx, cfg, p, allowDNSEvict)
 	if err != nil {
 		return nil, res, err
 	}
@@ -2027,7 +2086,7 @@ func attemptSSHAuth(ctx context.Context, cfg Config, p Profile) (*xssh.Client, P
 	return xssh.NewClient(sshConn, chans, reqs), res, nil
 }
 
-func openPreparedSSHConn(ctx context.Context, cfg Config, p Profile) (net.Conn, ProbeResult, error) {
+func openPreparedSSHConn(ctx context.Context, cfg Config, p Profile, allowDNSEvict bool) (net.Conn, ProbeResult, error) {
 	timeout := time.Duration(secondsDefault(cfg.Performance.ConnectTimeoutSec, 20)) * time.Second
 	readTimeout := time.Duration(secondsDefault(cfg.Performance.ReadProbeTimeoutSec, 6)) * time.Second
 	dialHost, dialPort, err := dialEndpoint(p)
@@ -2101,15 +2160,27 @@ func openPreparedSSHConn(ctx context.Context, cfg Config, p Profile) (net.Conn, 
 			// Keep the live socket open and let SSH read the banner after the response.
 			log.Printf("payload response statuses=%v; waiting for SSH banner", statuses)
 			// 302/301/503 = CDN rate-limiting or redirecting this IP.
-			// Evict DNS cache so the next reconnect tries the alternate Cloudflare IP.
-			for _, s := range statuses {
-				if s == 302 || s == 301 || s == 503 {
-					evictDNSCache(p.SSH.Host)
-					if p.Transport.HTTPProxy != nil {
-						evictDNSCache(p.Transport.HTTPProxy.Host)
+			// Only evict DNS for the *primary* auth attempt — pool reconnects
+			// hitting 302 are per-TCP-connection idle resets, not bad IPs, and
+			// evicting cascades unnecessary `ping` re-resolution across all
+			// other pool slots.
+			if allowDNSEvict {
+				for _, s := range statuses {
+					if s == 302 || s == 301 || s == 503 {
+						evictDNSCache(p.SSH.Host)
+						if p.Transport.HTTPProxy != nil {
+							evictDNSCache(p.Transport.HTTPProxy.Host)
+						}
+						log.Printf("payload got %d from CDN — DNS cache evicted, next retry uses alternate IP", s)
+						break
 					}
-					log.Printf("payload got %d from CDN — DNS cache evicted, next retry uses alternate IP", s)
-					break
+				}
+			} else {
+				for _, s := range statuses {
+					if s == 302 || s == 301 || s == 503 {
+						log.Printf("pool reconnect got %d from CDN — keeping cached IP (per-conn rate-limit, not DNS issue)", s)
+						break
+					}
 				}
 			}
 		} else {
@@ -2223,7 +2294,11 @@ func tuneTCPConn(c net.Conn, cfg Config, serverSide bool) {
 	if tc, ok := c.(*net.TCPConn); ok {
 		_ = tc.SetNoDelay(true)
 		_ = tc.SetKeepAlive(true)
-		ka := time.Duration(secondsDefault(cfg.Performance.KeepAliveSec, 60)) * time.Second
+		// Use a slightly longer cadence than SSH-level keepalive (which
+		// defaults to 15s) so the kernel keepalive only fires when the
+		// SSH-layer probe has already missed. 20s is short enough to
+		// keep NAT/CGNAT mappings warm for mobile carriers.
+		ka := time.Duration(secondsDefault(cfg.Performance.KeepAliveSec, 15)+5) * time.Second
 		_ = tc.SetKeepAlivePeriod(ka)
 		if serverSide {
 			// Large buffers for download throughput — the kernel can handle 4MB per conn
@@ -3267,16 +3342,50 @@ func routeSignature(ri RouteInfo) string {
 	if !ri.Online {
 		return "offline"
 	}
-	// Use ONLY the interface name to detect genuine network changes.
-	// Source IP changes constantly on mobile CGNAT networks — including it
-	// causes false-positive reconnects every few minutes.
-	// Gateway can flip during tower handoffs without losing connectivity.
-	// The interface name (rmnet_data0, wlan0, etc.) is the reliable signal.
-	if iface := strings.TrimSpace(ri.Iface); iface != "" {
-		return iface
+	// Group interfaces into families so HyperOS/MIUI bearer rotation
+	// (rmnet_data1 ↔ rmnet_data3 ↔ rmnet_data4 — all the same APN, same
+	// modem, just different PDN contexts) doesn't look like a network
+	// change. Only genuine medium switches (mobile↔wifi↔ethernet) flip
+	// the signature.
+	if fam := interfaceFamily(ri.Iface); fam != "" {
+		return fam
 	}
 	// Fallback: just "online" — better than nothing, still beats false reconnects
 	return "online"
+}
+
+// interfaceFamily collapses related interface names into a single family
+// label. The motivating case is HyperOS/MIUI rotating between rmnet_data1,
+// rmnet_data3, rmnet_data4 every 30-60 seconds during normal mobile data
+// use — these are different bearer contexts on the same APN and same
+// physical modem, not actual network changes. The kernel transparently
+// migrates active sockets across them.
+func interfaceFamily(name string) string {
+	name = strings.TrimSpace(strings.ToLower(name))
+	if name == "" {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(name, "rmnet"),
+		strings.HasPrefix(name, "ccmni"),
+		strings.HasPrefix(name, "rmnet_data"),
+		strings.HasPrefix(name, "pdp_ip"),
+		strings.HasPrefix(name, "ppp"):
+		return "mobile"
+	case strings.HasPrefix(name, "wlan"),
+		strings.HasPrefix(name, "wlp"),
+		strings.HasPrefix(name, "wifi"):
+		return "wifi"
+	case strings.HasPrefix(name, "eth"),
+		strings.HasPrefix(name, "enp"),
+		strings.HasPrefix(name, "usb"):
+		return "ethernet"
+	case strings.HasPrefix(name, "tun"),
+		strings.HasPrefix(name, "tap"):
+		return "vpn"
+	default:
+		return name
+	}
 }
 
 // startMetricsSampler periodically writes a metrics snapshot into State so
@@ -3425,7 +3534,7 @@ func secondsDefault(v, def int) int {
 
 func baseDialer(cfg Config) net.Dialer {
 	timeout := time.Duration(secondsDefault(cfg.Performance.ConnectTimeoutSec, 20)) * time.Second
-	keepAlive := time.Duration(secondsDefault(cfg.Performance.KeepAliveSec, 30)) * time.Second
+	keepAlive := time.Duration(secondsDefault(cfg.Performance.KeepAliveSec, 15)) * time.Second
 	return net.Dialer{Timeout: timeout, KeepAlive: keepAlive}
 }
 
