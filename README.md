@@ -17,7 +17,6 @@ Magisk / KernelSU module that routes Android TCP traffic through an SSH tunnel w
 
 ## Features
 
-- **SSH connection pool** — 4 parallel SSH sessions for faster throughput and resilience
 - **SOCKS5 proxy** + transparent TCP listener with iptables redirect
 - **Pluggable transport** — direct SSH, HTTP proxy, TLS/SNI, payload injection
 - **Hotspot tethering** — shares the tunnel with connected clients
