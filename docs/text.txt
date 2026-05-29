@@ -1,0 +1,45 @@
+oh, I forget to send log, 2026/05/29 10:06:10.914252 SSHCustom daemon 2.2.5 starting (idle=true)
+2026/05/29 10:06:10.914345 profile="Sample SSH Direct" mode=direct payload=false ssh=example.com:22 user=user
+2026/05/29 10:06:10.914355 transport chain=tcp -> ssh
+2026/05/29 10:06:10.914358 dns mode=device servers=[]
+2026/05/29 10:06:10.915966 daemon started in idle mode (WebUI only); tunnel not started
+2026/05/29 10:06:10.916225 API listening on http://127.0.0.1:9190
+2026/05/29 10:08:35.301870 starting tunnel with profile "Sample SSH Direct" (mode=direct)
+2026/05/29 10:08:35.304909 SSH auth attempt #1 starting
+2026/05/29 10:08:35.305092 dial tcp www.bc.game:80 method=device_system_dns
+2026/05/29 10:08:35.957594 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: read udp [::1]:57818->[::1]:53: read: connection refused
+2026/05/29 10:08:38.445941 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.29.120]
+2026/05/29 10:08:38.446279 dial tcp 104.18.29.120:80 host=www.bc.game method=android_shell_dns
+2026/05/29 10:08:38.592818 sending payload timing=before_ssh bytes=87
+2026/05/29 10:08:39.298106 server message: http/html banner suppressed (535 bytes)
+2026/05/29 10:08:39.458876 SSH authenticated: banner="SSH-2.0-dropbear_2022.83" http_statuses=[101] pool_size=1 max_streams_per_ssh=64
+2026/05/29 10:08:39.459283 SOCKS5 listening on 127.0.0.1:1080
+2026/05/29 10:08:44.668648 transparent TCP listening on 0.0.0.0:10810; iptables applied; hotspot_tcp=true
+2026/05/29 10:09:28.693336 transparent TCP stopped on 0.0.0.0:10810; iptables cleaned
+2026/05/29 10:09:28.693619 SOCKS5 stopped on 127.0.0.1:1080
+2026/05/29 10:09:31.361958 tunnel stopped
+2026/05/29 10:10:32.582414 starting tunnel with profile "Sample SSH Direct" (mode=direct)
+2026/05/29 10:10:32.587143 SSH auth attempt #1 starting
+2026/05/29 10:10:32.587293 dial tcp www.bc.game:80 method=device_system_dns
+2026/05/29 10:10:32.596878 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: read udp [::1]:60934->[::1]:53: read: connection refused
+2026/05/29 10:10:32.596976 dnsx: resolved www.bc.game from cache mode=device -> [104.18.29.120]
+2026/05/29 10:10:32.597045 dial tcp 104.18.29.120:80 host=www.bc.game method=dns_cached_android_shell_dns
+2026/05/29 10:10:32.753020 sending payload timing=before_ssh bytes=87
+2026/05/29 10:10:32.789320 payload response statuses=[302]; waiting for SSH banner
+2026/05/29 10:10:32.789409 dnsx: cache evicted for www.bc.game
+2026/05/29 10:10:32.789425 payload got 302 from CDN — DNS cache evicted, next retry uses alternate IP
+2026/05/29 10:10:32.794470 SSH auth attempt #1 failed: ssh auth/handshake failed: ssh: handshake failed: EOF
+2026/05/29 10:10:37.800113 SSH auth attempt #2 starting
+2026/05/29 10:10:37.800221 dial tcp www.bc.game:80 method=device_system_dns
+2026/05/29 10:10:37.811382 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: read udp [::1]:53610->[::1]:53: read: connection refused
+2026/05/29 10:10:38.564452 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.29.120]
+2026/05/29 10:10:38.564545 dial tcp 104.18.29.120:80 host=www.bc.game method=android_shell_dns
+2026/05/29 10:10:38.698845 sending payload timing=before_ssh bytes=87
+2026/05/29 10:10:39.333739 server message: http/html banner suppressed (535 bytes)
+2026/05/29 10:10:39.492139 SSH authenticated: banner="SSH-2.0-dropbear_2022.83" http_statuses=[101] pool_size=1 max_streams_per_ssh=64
+2026/05/29 10:10:39.508004 SOCKS5 listening on 127.0.0.1:1080
+2026/05/29 10:10:44.551011 transparent TCP listening on 0.0.0.0:10810; iptables applied; hotspot_tcp=true
+
+Home
+
+1. yes, create new branch for 5he fix .do everything automatically and autoomosly, just,send me,zip link to flash. 2. idk, do what will make everything smooth n snappy for me, no lag, overhead or delay. 3. my server details, 217.154.33.118 babaog@2 check for it. 4. focus purly on SSHCustom-Magisk first. verify u understand this and layout a plan and goal. verify u understand what I need. I'll give final,go command. remeber to use my github token where necessary.
