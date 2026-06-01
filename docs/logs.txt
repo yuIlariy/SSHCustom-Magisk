@@ -1,0 +1,87 @@
+2026/06/01 00:58:08.195427 SSHCustom daemon 2.4.1 starting (idle=true)
+2026/06/01 00:58:08.195538 profile="Sample SSH Direct" mode=direct payload=false ssh=example.com:22 user=user
+2026/06/01 00:58:08.195550 transport chain=tcp -> ssh
+2026/06/01 00:58:08.195555 dns mode=device servers=[]
+2026/06/01 00:58:08.202020 daemon started in idle mode (WebUI only); tunnel not started
+2026/06/01 00:58:08.202124 API listening on http://127.0.0.1:9190
+2026/06/01 00:59:34.361369 starting tunnel with profile "Sample SSH Direct" (mode=direct)
+2026/06/01 00:59:34.368789 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 00:59:34.368995 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 00:59:34.945108 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: read udp [::1]:45238->[::1]:53: read: connection refused
+2026/06/01 00:59:37.455518 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.29.120]
+2026/06/01 00:59:37.456869 dial tcp 104.18.29.120:80 host=www.bc.game method=android_shell_dns
+2026/06/01 00:59:37.625237 sending payload timing=before_ssh bytes=87
+2026/06/01 00:59:38.234689 server message: http/html banner suppressed (535 bytes)
+2026/06/01 00:59:38.380989 [tunnel] connected: banner="SSH-2.0-dropbear_2022.83" statuses=[101]
+2026/06/01 00:59:38.381780 [dns-forward] listening on 127.0.0.1:5353, upstream=8.8.8.8:53 (via SSH)
+2026/06/01 00:59:38.383169 [socks5] listening on 127.0.0.1:1080
+2026/06/01 00:59:38.384360 [transparent] listening on 0.0.0.0:10810
+2026/06/01 01:06:50.189823 tunnel stopped
+2026/06/01 01:10:02.400814 starting tunnel with profile "Sample SSH Direct" (mode=direct)
+2026/06/01 01:10:02.402964 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:10:02.403035 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:10:02.405429 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: dial udp [::1]:53: connect: network is unreachable
+2026/06/01 01:10:04.928659 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.29.120]
+2026/06/01 01:10:04.928749 dial tcp 104.18.29.120:80 host=www.bc.game method=android_shell_dns
+2026/06/01 01:10:05.053991 sending payload timing=before_ssh bytes=87
+2026/06/01 01:10:05.708003 server message: http/html banner suppressed (535 bytes)
+2026/06/01 01:10:05.871265 [tunnel] connected: banner="SSH-2.0-dropbear_2022.83" statuses=[101]
+2026/06/01 01:10:05.871733 [dns-forward] listening on 127.0.0.1:5353, upstream=8.8.8.8:53 (via SSH)
+2026/06/01 01:10:05.871738 [socks5] listening on 127.0.0.1:1080
+2026/06/01 01:10:05.871879 [transparent] listening on 0.0.0.0:10810
+2026/06/01 01:10:13.933208 [tunnel] connection lost — reconnecting (routing kept up)
+2026/06/01 01:10:14.940458 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:10:14.940596 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:10:14.952114 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+2026/06/01 01:10:14.952242 dnsx: resolved www.bc.game from cache mode=device -> [104.18.29.120]
+2026/06/01 01:10:14.952288 dial tcp 104.18.29.120:80 host=www.bc.game method=dns_cached_android_shell_dns
+2026/06/01 01:10:15.099143 sending payload timing=before_ssh bytes=87
+2026/06/01 01:10:15.740806 server message: http/html banner suppressed (535 bytes)
+2026/06/01 01:10:15.899768 [tunnel] connected: banner="SSH-2.0-dropbear_2022.83" statuses=[101]
+2026/06/01 01:10:33.103708 [tunnel] connection lost — reconnecting (routing kept up)
+2026/06/01 01:10:34.108966 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:10:34.109068 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:10:34.115355 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+2026/06/01 01:10:34.115521 dnsx: resolved www.bc.game from cache mode=device -> [104.18.29.120]
+2026/06/01 01:10:34.115558 dial tcp 104.18.29.120:80 host=www.bc.game method=dns_cached_android_shell_dns
+2026/06/01 01:10:34.300571 sending payload timing=before_ssh bytes=87
+2026/06/01 01:10:34.325163 payload response statuses=[302]; waiting for SSH banner
+2026/06/01 01:10:34.325281 dnsx: cache evicted for www.bc.game
+2026/06/01 01:10:34.325293 payload got 302 from CDN — DNS cache evicted, next retry uses alternate IP
+2026/06/01 01:10:34.325853 [tunnel] connect failed: ssh auth/handshake failed: ssh: handshake failed: EOF
+2026/06/01 01:10:36.329990 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:10:36.330086 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:10:36.332962 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+2026/06/01 01:10:38.871404 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.29.120]
+2026/06/01 01:10:38.871474 dial tcp 104.18.29.120:80 host=www.bc.game method=android_shell_dns
+2026/06/01 01:10:39.015362 sending payload timing=before_ssh bytes=87
+2026/06/01 01:10:39.044813 payload response statuses=[302]; waiting for SSH banner
+2026/06/01 01:10:39.044965 dnsx: cache evicted for www.bc.game
+2026/06/01 01:10:39.044989 payload got 302 from CDN — DNS cache evicted, next retry uses alternate IP
+2026/06/01 01:10:39.047638 [tunnel] connect failed: ssh auth/handshake failed: ssh: handshake failed: EOF
+2026/06/01 01:10:46.898738 tunnel stopped
+2026/06/01 01:11:30.299756 starting tunnel with profile "Sample SSH Direct" (mode=direct)
+2026/06/01 01:11:30.301805 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:11:30.301874 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:11:30.304090 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: read udp [::1]:43438->[::1]:53: read: connection refused
+2026/06/01 01:11:32.796513 dnsx: resolved www.bc.game via ping -c 1 -W 2 www.bc.game -> [104.18.28.120]
+2026/06/01 01:11:32.796600 dial tcp 104.18.28.120:80 host=www.bc.game method=android_shell_dns
+2026/06/01 01:11:32.944383 sending payload timing=before_ssh bytes=87
+2026/06/01 01:11:33.635253 server message: http/html banner suppressed (535 bytes)
+2026/06/01 01:11:33.795789 [tunnel] connected: banner="SSH-2.0-dropbear_2022.83" statuses=[101]
+2026/06/01 01:11:33.797457 [socks5] listening on 127.0.0.1:1080
+2026/06/01 01:11:33.799829 [dns-forward] listening on 127.0.0.1:5353, upstream=8.8.8.8:53 (via SSH)
+2026/06/01 01:11:33.800016 [transparent] listening on 0.0.0.0:10810
+2026/06/01 01:12:13.326594 [tunnel] connection lost — reconnecting (routing kept up)
+2026/06/01 01:12:19.333229 [tunnel] connecting www.bc.game:80 mode=direct
+2026/06/01 01:12:19.333300 dial tcp www.bc.game:80 method=device_system_dns
+2026/06/01 01:12:19.335177 device/system hostname dial failed for www.bc.game:80: dial tcp: lookup www.bc.game on [::1]:53: dial udp [::1]:53: connect: cannot assign requested address
+2026/06/01 01:12:19.335213 dnsx: resolved www.bc.game from cache mode=device -> [104.18.28.120]
+2026/06/01 01:12:19.335236 dial tcp 104.18.28.120:80 host=www.bc.game method=dns_cached_android_shell_dns
+2026/06/01 01:12:19.491657 sending payload timing=before_ssh bytes=87
+2026/06/01 01:12:20.195649 server message: http/html banner suppressed (535 bytes)
+2026/06/01 01:12:20.365308 [tunnel] connected: banner="SSH-2.0-dropbear_2022.83" statuses=[101]
+
+Home
+
+Profiles
